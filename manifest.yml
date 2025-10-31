@@ -1,0 +1,38 @@
+app:
+  id: REPLACE-WITH-APP-ID
+  runtime:
+    name: nodejs22.x
+
+modules:
+  jira:globalPage:
+    - key: track-linker-page
+      resource: main
+      render: native
+      resolver:
+        function: track-linker-resolver
+      title: Formula 1 Track Linker - JIRA App
+  jira:issueAction:
+    - key: track-linker-issue-action
+      resource: main
+      render: native
+      resolver:
+        function: track-linker-resolver
+      title: Track Linker
+      viewportSize: large
+
+  function:
+    - key: track-linker-resolver
+      handler: index.handler
+
+resources:
+  - key: main
+    path: src/frontend/index.tsx
+  - key: track-viewer
+    path: resources/track-viewer/build
+
+permissions:
+  scopes:
+    - write:jira-work
+    - write:attachment:jira
+    - read:jira-work
+    - storage:app

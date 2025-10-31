@@ -1,0 +1,42 @@
+# Node Modules
+node_modules/
+resources/track-viewer/node_modules/
+
+# Cursor
+.cursor/
+resources/track-viewer/.cursor/
+src/frontend/.cursor/
+
+# VS Code
+.vscode/
+
+# Forge
+.forge/
+
+# Build outputs
+dist/
+build/
+*.log
+.DS_Store
+.env
+.env.local
+*.swp
+*.swo
+.idea/
+
+# Track Viewer Build outputs
+resources/track-viewer/build/
+*.map
+
+# Other
+scripts/
+src/domain/entities/
+tests/
+
+
+# Work-In-Progress (TBC - To Be Completed)
+resources/telemetry/
+resources/tracks/
+resources/track-viewer/src/components/
+resources/track-viewer/src/styles/
+resources/track-viewer/src/utils/
