@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { events, invoke, showFlag } from '@forge/bridge';
 import type { GetTrackGeoJsonResponse } from '../../types';
 import type { TrackSelectionPayload } from '../types/track-selection';
 import { buildSelectionSummary } from '../utils/selection-format';
+import {
+  VIEWER_EVENT,
+  type ViewerInteractionMode,
+  type ViewerSetModePayload,
+  type ViewerStatusPayload,
+} from '../constants/viewer-events';
+import {
+  getStatusAfterSelection,
+  getStatusForMode,
+  getStatusWhenNoTrack,
+} from '../utils/viewer-status';
 
 export type UseTrackLinkerCoreResult = {
   loading: boolean;
@@ -13,6 +24,9 @@ export type UseTrackLinkerCoreResult = {
   selectedSection: TrackSelectionPayload | null;
   setSelectedSection: (section: TrackSelectionPayload | null) => void;
   selectionSummary: ReturnType<typeof buildSelectionSummary> | null;
+  viewerMode: ViewerInteractionMode;
+  viewerStatus: string;
+  setViewerMode: (mode: ViewerInteractionMode) => void;
   loadTrack: () => Promise<void>;
   handleReset: () => void;
 };
@@ -32,6 +46,24 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
   const [frameReady, setFrameReady] = useState<boolean>(false);
   const [pendingGeoJson, setPendingGeoJson] = useState<unknown>(null);
   const [selectedSection, setSelectedSection] = useState<TrackSelectionPayload | null>(null);
+  const [viewerMode, setViewerModeState] = useState<ViewerInteractionMode>('pan');
+  const [viewerStatus, setViewerStatus] = useState<string>(getStatusWhenNoTrack());
+  const viewerModeRef = useRef<ViewerInteractionMode>(viewerMode);
+  viewerModeRef.current = viewerMode;
+
+  const syncViewerMode = useCallback((mode: ViewerInteractionMode): void => {
+    const payload: ViewerSetModePayload = { mode };
+    void events.emit(VIEWER_EVENT.SET_MODE, payload);
+  }, []);
+
+  const setViewerMode = useCallback(
+    (mode: ViewerInteractionMode): void => {
+      setViewerModeState(mode);
+      setViewerStatus(getStatusForMode(mode, trackLoaded));
+      syncViewerMode(mode);
+    },
+    [trackLoaded, syncViewerMode],
+  );
 
   useEffect(() => {
     let active = true;
@@ -43,6 +75,32 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
         if (pendingGeoJson) {
           void events.emit('GEOJSON_LOAD', { geoJsonContent: pendingGeoJson });
           setPendingGeoJson(null);
+        }
+        syncViewerMode(viewerModeRef.current);
+      })
+      .then((subscription) => {
+        if (active) {
+          unsubscribe = subscription.unsubscribe;
+        } else {
+          subscription.unsubscribe();
+        }
+      });
+
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, [pendingGeoJson, syncViewerMode]);
+
+  useEffect(() => {
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+
+    void events
+      .on(VIEWER_EVENT.STATUS, (eventData) => {
+        const payload = eventData as ViewerStatusPayload;
+        if (payload?.message) {
+          setViewerStatus(payload.message);
         }
       })
       .then((subscription) => {
@@ -57,7 +115,7 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
       active = false;
       unsubscribe?.();
     };
-  }, [pendingGeoJson]);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -67,10 +125,12 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
       .on('TRACK_SECTION_SELECTED', (eventData) => {
         const payload = eventData as TrackSelectionPayload;
         setSelectedSection(payload);
+        setViewerStatus(getStatusAfterSelection());
         showFlag({
           id: 'track-section-captured',
           title: 'Track section captured',
           type: 'info',
+          appearance: 'info',
           description: 'Review the selection details below.',
           isAutoDismiss: true,
         });
@@ -105,9 +165,11 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
         }
       } else {
         setTrackLoaded(false);
+        setViewerStatus(getStatusWhenNoTrack());
       }
     } catch {
       setTrackLoaded(false);
+      setViewerStatus(getStatusWhenNoTrack());
     }
   }, [frameReady]);
 
@@ -123,10 +185,23 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
     })();
   }, [loadTrack]);
 
+  useEffect(() => {
+    if (!selectedSection) {
+      setViewerStatus(getStatusForMode(viewerMode, trackLoaded));
+    }
+  }, [trackLoaded, viewerMode, selectedSection]);
+
   const handleReset = useCallback((): void => {
     void events.emit('TRACK_RESET', {});
     setSelectedSection(null);
-  }, []);
+    setViewerModeState('pan');
+    syncViewerMode('pan');
+    setViewerStatus(
+      trackLoaded
+        ? 'View reset. Pan / zoom or switch to Brush Select.'
+        : getStatusWhenNoTrack(),
+    );
+  }, [trackLoaded, syncViewerMode]);
 
   const selectionSummary = useMemo(() => {
     if (!selectedSection) {
@@ -144,6 +219,9 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
     selectedSection,
     setSelectedSection,
     selectionSummary,
+    viewerMode,
+    viewerStatus,
+    setViewerMode,
     loadTrack,
     handleReset,
   };

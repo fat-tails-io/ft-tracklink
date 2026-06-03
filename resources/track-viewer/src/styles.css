@@ -58,43 +58,6 @@ body {
   pointer-events: all;
 }
 
-.control-panel {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  display: flex;
-  gap: 8px;
-  z-index: 20;
-}
-
-.control-button {
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  color: #091e42;
-}
-
-.control-button.active {
-  background: #0052cc;
-  color: #fff;
-}
-
-.status-bar {
-  padding: 8px 16px;
-  background: #f9f9f9;
-  border-top: 1px solid #e0e0e0;
-  font-size: 13px;
-  color: #666;
-}
-
-#status {
-  display: inline-block;
-}
-
 /* Brush selection styling */
 .brush-group .selection {
   fill: rgba(0, 82, 204, 0.1);

@@ -27,7 +27,7 @@ jobs:
           if [ "$TAG" = "v1.0.0" ]; then
             TITLE="${TAG} — F1 Track Linker (stable)"
             PHASE_LABEL="complete product"
-          elif echo "$TAG" | grep -qE '^v0\.0\.[0-7]$'; then
+          elif echo "$TAG" | grep -qE '^v0\.0\.[0-8]$'; then
             PHASE="${TAG##*.}"
             TITLE="${TAG} — Phase ${PHASE}"
             PHASE_LABEL="Phase ${PHASE}"

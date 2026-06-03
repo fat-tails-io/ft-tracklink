@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
-import { Box, Stack, Spinner, Text } from '@forge/react';
 import { TrackLinkerShell } from './TrackLinkerShell';
 import { SelectionSummaryPanel } from './components/SelectionSummaryPanel';
 import { CreateIssuePanel } from './components/CreateIssuePanel';
+import { TrackLinkerLoading } from './components/TrackLinkerLoading';
 import { useTrackLinkerCore } from './hooks/useTrackLinkerCore';
 import { useCreateIssueFromSelection } from './hooks/useCreateIssueFromSelection';
 
@@ -16,6 +16,9 @@ export const GlobalTrackLinker = (): React.JSX.Element => {
     selectedSection,
     setSelectedSection,
     selectionSummary,
+    viewerMode,
+    viewerStatus,
+    setViewerMode,
     loadTrack,
     handleReset,
   } = useTrackLinkerCore();
@@ -38,28 +41,24 @@ export const GlobalTrackLinker = (): React.JSX.Element => {
   }, [selectedSection, applyDefaultSummary]);
 
   if (loading) {
-    return (
-      <Box padding="space.400">
-        <Stack space="space.200" alignInline="center">
-          <Spinner />
-          <Text>Loading track viewer...</Text>
-        </Stack>
-      </Box>
-    );
+    return <TrackLinkerLoading />;
   }
 
   return (
     <TrackLinkerShell
-      title="F1 Track Linker"
+      pageHeading="Circuit map"
       trackLoaded={trackLoaded}
       trackName={trackName}
       uploadModalOpen={uploadModalOpen}
+      viewerMode={viewerMode}
+      viewerStatus={viewerStatus}
       onOpenUpload={() => setUploadModalOpen(true)}
       onCloseUpload={() => setUploadModalOpen(false)}
       onUploadSuccess={() => {
         void loadTrack();
       }}
       onReset={handleReset}
+      onViewerModeChange={setViewerMode}
       showTrackAdminControls
     >
       <SelectionSummaryPanel selectionSummary={selectionSummary} />

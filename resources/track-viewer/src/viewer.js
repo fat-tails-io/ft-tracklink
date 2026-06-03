@@ -22,10 +22,6 @@ let isBrushMode = false; // Default mode is pan/zoom
 let currentTransform = d3.zoomIdentity;
 let resizeObserver = null;
 let brushGroupRef = null;
-const modeButtons = {
-  pan: null,
-  brush: null,
-};
 
 // Initialize the visualization
 async function init() {
@@ -49,7 +45,7 @@ async function init() {
 
   // Set up interactions
   setupInteractions();
-  setupModeControls();
+  setInteractionMode('pan');
   setupResizeHandling();
   updateStatus('Ready - Waiting for track data');
 
@@ -180,7 +176,7 @@ function loadGeoJson(geoJsonContent) {
 
     // Draw the track
     draw();
-    updateStatus('Track loaded - Drag to pan, scroll to zoom. Use Brush Select for area selection.');
+    updateStatus('Track loaded. Use Pan / Zoom or Brush Select from the toolbar above the map.');
   } catch (error) {
     console.error('Error loading GeoJSON:', error);
     updateStatus(`Error loading track: ${error.message}`);
@@ -344,31 +340,10 @@ function setupInteractions() {
   }, 100);
 }
 
-function setupModeControls() {
-  modeButtons.pan = document.getElementById('mode-pan');
-  modeButtons.brush = document.getElementById('mode-brush');
-
-  if (modeButtons.pan) {
-    modeButtons.pan.addEventListener('click', () => {
-      setInteractionMode('pan');
-    });
-  }
-
-  if (modeButtons.brush) {
-    modeButtons.brush.addEventListener('click', () => {
-      setInteractionMode('brush');
-    });
-  }
-
-  // Default to pan/zoom on load
-  setInteractionMode('pan');
-}
-
 function setInteractionMode(mode) {
   const enableBrush = mode === 'brush';
 
   if (enableBrush === isBrushMode) {
-    updateModeButtonStyles(mode);
     return;
   }
 
@@ -381,20 +356,9 @@ function setInteractionMode(mode) {
   resetBrush();
 
   if (enableBrush) {
-    updateStatus('Brush mode - Drag to select an area. Click Pan / Zoom to exit.');
+    updateStatus('Brush Select — drag on the map to select an area.');
   } else {
-    updateStatus('Pan / Zoom mode - Drag to pan, scroll to zoom. Use Brush Select for area selection.');
-  }
-
-  updateModeButtonStyles(mode);
-}
-
-function updateModeButtonStyles(mode) {
-  if (modeButtons.pan) {
-    modeButtons.pan.classList.toggle('active', mode !== 'brush');
-  }
-  if (modeButtons.brush) {
-    modeButtons.brush.classList.toggle('active', mode === 'brush');
+    updateStatus('Pan / Zoom — drag to pan, scroll to zoom.');
   }
 }
 
@@ -448,11 +412,12 @@ function generateThumbnail(viewport) {
   });
 }
 
-// Update status message
+// Emit status to UI Kit (status line lives outside the Frame)
 function updateStatus(message) {
-  const statusElement = document.getElementById('status');
-  if (statusElement) {
-    statusElement.textContent = message;
+  try {
+    events.emit('VIEWER_STATUS', { message });
+  } catch (error) {
+    console.error('Failed to emit viewer status:', error);
   }
 }
 
@@ -478,11 +443,17 @@ async function initForgeBridge() {
     // Listen for TRACK_RESET event
     const resetSubscription = await events.on('TRACK_RESET', () => {
       resetViewToDefault();
+      setInteractionMode('pan');
       if (geoData) {
         updateProjection();
         draw();
       }
-      updateStatus('Track view reset');
+      updateStatus('View reset.');
+    });
+
+    const modeSubscription = await events.on('VIEWER_SET_MODE', (eventData) => {
+      const mode = eventData?.mode === 'brush' ? 'brush' : 'pan';
+      setInteractionMode(mode);
     });
 
     // Store subscriptions for cleanup if needed
@@ -490,6 +461,7 @@ async function initForgeBridge() {
       geoJson: geoJsonSubscription,
       svg: svgSubscription,
       reset: resetSubscription,
+      mode: modeSubscription,
     };
   } catch (error) {
     console.error('Failed to initialize Forge bridge:', error);

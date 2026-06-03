@@ -1,82 +1,104 @@
 import React from 'react';
-import { Box, Stack, Inline, Heading, Text, Button, Frame } from '@forge/react';
+import {
+  Box,
+  Stack,
+  Inline,
+  Heading,
+  Text,
+  Button,
+  Frame,
+  SectionMessage,
+} from '@forge/react';
 import { GeoJsonUploadModal } from './components/GeoJsonUploadModal';
-
-const frameContainerXcss = {
-  width: '100%',
-  height: '600px',
-  borderWidth: 'border.width',
-  borderStyle: 'solid',
-  borderColor: 'color.border',
-  borderRadius: 'border.radius',
-} as const;
+import { ViewerMapControls } from './components/ViewerMapControls';
+import { ViewerStatusLine } from './components/ViewerStatusLine';
+import type { ViewerInteractionMode } from './constants/viewer-events';
+import { frameSurfaceXcss, trackMetaXcss } from './styles/shell-xcss';
 
 export interface TrackLinkerShellProps {
-  title: string;
+  pageHeading: string;
   trackLoaded: boolean;
   trackName: string;
   uploadModalOpen: boolean;
+  viewerMode: ViewerInteractionMode;
+  viewerStatus: string;
   onOpenUpload: () => void;
   onCloseUpload: () => void;
   onUploadSuccess: () => void;
   onReset: () => void;
+  onViewerModeChange: (mode: ViewerInteractionMode) => void;
   showTrackAdminControls?: boolean;
   contextBanner?: React.ReactNode;
   children: React.ReactNode;
 }
 
 export const TrackLinkerShell = ({
-  title,
+  pageHeading,
   trackLoaded,
   trackName,
   uploadModalOpen,
+  viewerMode,
+  viewerStatus,
   onOpenUpload,
   onCloseUpload,
   onUploadSuccess,
   onReset,
+  onViewerModeChange,
   showTrackAdminControls = true,
   contextBanner,
   children,
 }: TrackLinkerShellProps): React.JSX.Element => (
-  <Box padding="space.400">
-    <Stack space="space.300">
-      <Stack space="space.200">
-        <Heading as="h1">{title}</Heading>
-        {contextBanner}
-        {trackLoaded && trackName && <Text>Track: {trackName}</Text>}
-        {showTrackAdminControls && (
-          <Inline space="space.100">
-            <Button onClick={onOpenUpload} appearance="primary">
-              {trackLoaded ? 'Replace Track' : 'Upload Track GeoJSON'}
-            </Button>
-            {trackLoaded && (
-              <Button onClick={onReset} appearance="default">
-                Reset View
+    <Box padding="space.400">
+      <Stack space="space.300">
+        <Stack space="space.200">
+          <Heading size="large">{pageHeading}</Heading>
+          {contextBanner}
+          {trackLoaded && trackName && (
+            <Box xcss={trackMetaXcss}>
+              <Text>Loaded track: {trackName}</Text>
+            </Box>
+          )}
+          {showTrackAdminControls && (
+            <Inline space="space.100" alignBlock="center">
+              <Button onClick={onOpenUpload} appearance="primary">
+                {trackLoaded ? 'Replace track' : 'Upload track GeoJSON'}
               </Button>
-            )}
-          </Inline>
+              {trackLoaded && (
+                <Button onClick={onReset} appearance="default">
+                  Reset view
+                </Button>
+              )}
+            </Inline>
+          )}
+        </Stack>
+
+        {!trackLoaded && (
+          <SectionMessage appearance="warning" title="No track loaded">
+            <Text>Upload a GeoJSON circuit file to display the map and capture brush selections.</Text>
+          </SectionMessage>
         )}
+
+        <Stack space="space.100">
+          <ViewerMapControls
+            mode={viewerMode}
+            trackLoaded={trackLoaded}
+            onModeChange={onViewerModeChange}
+          />
+          <Box xcss={frameSurfaceXcss}>
+            <Frame resource="track-viewer" />
+          </Box>
+          <ViewerStatusLine status={viewerStatus} />
+        </Stack>
+
+        {showTrackAdminControls && (
+          <GeoJsonUploadModal
+            isOpen={uploadModalOpen}
+            onClose={onCloseUpload}
+            onSuccess={onUploadSuccess}
+          />
+        )}
+
+        {children}
       </Stack>
-
-      {!trackLoaded && (
-        <Box padding="space.200" backgroundColor="color.background.warning">
-          <Text>No track loaded. Please upload a track GeoJSON file.</Text>
-        </Box>
-      )}
-
-      <Box xcss={frameContainerXcss}>
-        <Frame resource="track-viewer" />
-      </Box>
-
-      {showTrackAdminControls && (
-        <GeoJsonUploadModal
-          isOpen={uploadModalOpen}
-          onClose={onCloseUpload}
-          onSuccess={onUploadSuccess}
-        />
-      )}
-
-      {children}
-    </Stack>
-  </Box>
+    </Box>
 );

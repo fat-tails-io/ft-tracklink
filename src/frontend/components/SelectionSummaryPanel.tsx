@@ -1,13 +1,7 @@
 import React from 'react';
-import { Box, Stack, Heading, Text } from '@forge/react';
+import { Box, Stack, Heading, Text, SectionMessage } from '@forge/react';
 import type { SelectionSummary } from '../types/track-selection';
-
-const panelBorderXcss = {
-  borderWidth: 'border.width',
-  borderStyle: 'solid',
-  borderColor: 'color.border',
-  borderRadius: 'border.radius',
-} as const;
+import { panelSurfaceXcss } from '../styles/shell-xcss';
 
 export interface SelectionSummaryPanelProps {
   selectionSummary: SelectionSummary | null;
@@ -16,19 +10,34 @@ export interface SelectionSummaryPanelProps {
 export const SelectionSummaryPanel = ({
   selectionSummary,
 }: SelectionSummaryPanelProps): React.JSX.Element => (
-  <Box padding="space.200" xcss={panelBorderXcss}>
+  <Box xcss={panelSurfaceXcss}>
     <Stack space="space.200">
-      <Heading as="h3">Latest brush selection</Heading>
+      <Heading size="medium">Selection summary</Heading>
       {selectionSummary ? (
-        <Stack space="space.100">
-          <Text>Viewport: {selectionSummary.viewport}</Text>
-          <Text>Screen: {selectionSummary.screen}</Text>
-          <Text>Geo: {selectionSummary.geo}</Text>
-          <Text>Track properties:</Text>
-          <Text>{selectionSummary.trackProps}</Text>
+        <Stack space="space.150">
+          <Stack space="space.050">
+            <Heading size="small">Viewport</Heading>
+            <Text>{selectionSummary.viewport}</Text>
+          </Stack>
+          <Stack space="space.050">
+            <Heading size="small">Screen coordinates</Heading>
+            <Text>{selectionSummary.screen}</Text>
+          </Stack>
+          <Stack space="space.050">
+            <Heading size="small">Geographic bounds</Heading>
+            <Text>{selectionSummary.geo}</Text>
+          </Stack>
+          <Stack space="space.050">
+            <Heading size="small">Track properties</Heading>
+            <Text>{selectionSummary.trackProps}</Text>
+          </Stack>
         </Stack>
       ) : (
-        <Text>No selection captured yet. Use Brush Select in the viewer to capture a section.</Text>
+        <SectionMessage appearance="information" title="No selection yet">
+          <Text>
+            Switch to Brush Select above the map, then drag on the circuit to capture a section.
+          </Text>
+        </SectionMessage>
       )}
     </Stack>
   </Box>

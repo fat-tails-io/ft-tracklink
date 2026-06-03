@@ -1,8 +1,9 @@
 import React, { useEffect } from 'react';
-import { Box, Stack, Spinner, Text } from '@forge/react';
 import { TrackLinkerShell } from './TrackLinkerShell';
 import { SelectionSummaryPanel } from './components/SelectionSummaryPanel';
 import { CreateIssuePanel } from './components/CreateIssuePanel';
+import { TrackLinkerLoading } from './components/TrackLinkerLoading';
+import { IssueContextBanner } from './components/IssueContextBanner';
 import { useTrackLinkerCore } from './hooks/useTrackLinkerCore';
 import { useCreateIssueFromSelection } from './hooks/useCreateIssueFromSelection';
 import { useIssueProductContext } from './hooks/useIssueProductContext';
@@ -19,6 +20,9 @@ export const IssueTrackLinker = (): React.JSX.Element => {
     selectedSection,
     setSelectedSection,
     selectionSummary,
+    viewerMode,
+    viewerStatus,
+    setViewerMode,
     loadTrack,
     handleReset,
   } = useTrackLinkerCore();
@@ -51,42 +55,28 @@ export const IssueTrackLinker = (): React.JSX.Element => {
   }, [selectedSection, applyDefaultSummary]);
 
   if (loading) {
-    return (
-      <Box padding="space.400">
-        <Stack space="space.200" alignInline="center">
-          <Spinner />
-          <Text>Loading track viewer...</Text>
-        </Stack>
-      </Box>
-    );
+    return <TrackLinkerLoading />;
   }
 
-  const title = issueKey ? `Track Linker — ${issueKey}` : 'Track Linker';
-
-  const contextBanner = (
-    <Stack space="space.100">
-      {issueKey && <Text>Current issue: {issueKey}</Text>}
-      {projectKey && <Text>Project: {projectKey}</Text>}
-      {!issueKey && (
-        <Text>Issue context is loading. Link-to-current flows arrive in Phase 5.</Text>
-      )}
-    </Stack>
-  );
+  const pageHeading = issueKey ? `Link track section — ${issueKey}` : 'Link track section';
 
   return (
     <TrackLinkerShell
-      title={title}
+      pageHeading={pageHeading}
       trackLoaded={trackLoaded}
       trackName={trackName}
       uploadModalOpen={uploadModalOpen}
+      viewerMode={viewerMode}
+      viewerStatus={viewerStatus}
       onOpenUpload={() => setUploadModalOpen(true)}
       onCloseUpload={() => setUploadModalOpen(false)}
       onUploadSuccess={() => {
         void loadTrack();
       }}
       onReset={handleReset}
+      onViewerModeChange={setViewerMode}
       showTrackAdminControls
-      contextBanner={contextBanner}
+      contextBanner={<IssueContextBanner issueKey={issueKey} projectKey={projectKey} />}
     >
       <SelectionSummaryPanel selectionSummary={selectionSummary} />
       <CreateIssuePanel

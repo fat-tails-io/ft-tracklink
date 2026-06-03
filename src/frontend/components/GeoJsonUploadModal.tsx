@@ -12,9 +12,12 @@ import {
   Stack,
   Text,
   Spinner,
+  Label,
+  Box,
 } from '@forge/react';
 import { invoke, showFlag } from '@forge/bridge';
 import type { SaveTrackGeoJsonRequest } from '../../types';
+import { subtleTextXcss } from '../styles/shell-xcss';
 
 interface GeoJsonUploadModalProps {
   isOpen: boolean;
@@ -38,7 +41,7 @@ export const GeoJsonUploadModal = ({
         title: 'Missing information',
         type: 'error',
         appearance: 'error',
-        description: 'Please provide both a track name and paste GeoJSON content',
+        description: 'Provide both a track name and GeoJSON content.',
         isAutoDismiss: true,
       });
       return;
@@ -59,7 +62,7 @@ export const GeoJsonUploadModal = ({
         !geoJsonContent.type ||
         (geoJsonContent.type !== 'FeatureCollection' && geoJsonContent.type !== 'Feature')
       ) {
-        throw new Error('Content does not appear to be valid GeoJSON (should be FeatureCollection or Feature)');
+        throw new Error('Content must be a GeoJSON FeatureCollection or Feature.');
       }
 
       const request: SaveTrackGeoJsonRequest = {
@@ -71,18 +74,16 @@ export const GeoJsonUploadModal = ({
 
       showFlag({
         id: 'upload-success',
-        title: 'GeoJSON uploaded successfully',
+        title: 'GeoJSON uploaded',
         type: 'success',
         appearance: 'success',
-        description: `Track "${trackName}" has been uploaded`,
+        description: `Track "${trackName}" is ready to load.`,
         isAutoDismiss: true,
       });
 
-      // Reset form
       setTrackName('');
       setGeoJsonText('');
       onClose();
-      // Call onSuccess after modal closes to reload track
       setTimeout(() => {
         onSuccess();
       }, 100);
@@ -114,44 +115,46 @@ export const GeoJsonUploadModal = ({
       {isOpen && (
         <Modal onClose={handleClose}>
           <ModalHeader>
-            <ModalTitle>Upload Track GeoJSON</ModalTitle>
+            <ModalTitle>Upload track GeoJSON</ModalTitle>
           </ModalHeader>
           <ModalBody>
             <Stack space="space.300">
               <Stack space="space.100">
-                <Text>Track Name</Text>
+                <Label labelFor="upload-track-name">Track name</Label>
                 <Textfield
+                  id="upload-track-name"
                   value={trackName}
                   onChange={(e) =>
                     setTrackName(String((e as { target?: { value?: string } }).target?.value ?? ''))
                   }
-                  placeholder="e.g., Silverstone, Monaco, Monza"
+                  placeholder="e.g. Silverstone, Monaco, Monza"
                   isDisabled={isLoading}
                 />
               </Stack>
 
               <Stack space="space.100">
-                <Text>GeoJSON Content</Text>
+                <Label labelFor="upload-geojson-content">GeoJSON content</Label>
                 <TextArea
+                  id="upload-geojson-content"
                   name="geojson-content"
                   value={geoJsonText}
                   onChange={(e) =>
                     setGeoJsonText(String((e as { target?: { value?: string } }).target?.value ?? ''))
                   }
-                  placeholder='Paste GeoJSON content here, e.g., {"type": "FeatureCollection", "features": [...]}'
+                  placeholder='Paste GeoJSON, e.g. {"type": "FeatureCollection", "features": [...]}'
                   isDisabled={isLoading}
                   minimumRows={10}
                 />
                 {geoJsonText && (
-                  <Text>
-                    {geoJsonText.length} characters
-                  </Text>
+                  <Box xcss={subtleTextXcss}>
+                    <Text>{geoJsonText.length} characters</Text>
+                  </Box>
                 )}
               </Stack>
             </Stack>
           </ModalBody>
           <ModalFooter>
-            <Button onClick={handleClose} isDisabled={isLoading}>
+            <Button appearance="subtle" onClick={handleClose} isDisabled={isLoading}>
               Cancel
             </Button>
             <Button
@@ -169,4 +172,3 @@ export const GeoJsonUploadModal = ({
     </ModalTransition>
   );
 };
-

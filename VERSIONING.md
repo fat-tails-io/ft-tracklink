@@ -14,7 +14,8 @@ This project uses [Semantic Versioning](https://semver.org/) aligned with the [F
 | `v0.0.5` | `0.0.5` | Phase 5 — Issue-centric workflow |
 | `v0.0.6` | `0.0.6` | Phase 6 — Jira custom fields |
 | `v0.0.7` | `0.0.7` | Phase 7 — Rovo Chat |
-| `v1.0.0` | `1.0.0` | Complete product (all phases shipped) |
+| `v0.0.8` | `0.0.8` | Phase 8 — Session driver overlay (constructor accents) |
+| `v1.0.0` | `1.0.0` | Complete product (Phases 1–8 shipped) |
 
 The **patch** number equals the **phase** number during development (`0.0.N` → Phase N). Major and minor stay at `0` until the roadmap is complete; then **`v1.0.0`** marks the stable release.
 
@@ -64,10 +65,10 @@ When Phase 7 is complete, bump to `1.0.0`, tag `v1.0.0`, and push — the workfl
 
 | Tag pattern | Release title | Prerelease |
 |-------------|---------------|------------|
-| `v0.0.0` … `v0.0.7` | `v0.0.N — Phase N` | yes |
+| `v0.0.0` … `v0.0.8` | `v0.0.N — Phase N` | yes |
 | `v1.0.0` | `v1.0.0 — F1 Track Linker (stable)` | no |
 
-Tags outside `v0.0.0`–`v0.0.7` and `v1.0.0` are rejected by the workflow. Re-pushing an existing tag does not re-run the workflow unless the tag is deleted and pushed again.
+Tags outside `v0.0.0`–`v0.0.8` and `v1.0.0` are rejected by the workflow. Re-pushing an existing tag does not re-run the workflow unless the tag is deleted and pushed again.
 
 ## Forge installs
 
