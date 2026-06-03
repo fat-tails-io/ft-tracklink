@@ -47,21 +47,23 @@ export const GeoJsonUploadModal = ({
     setIsLoading(true);
 
     try {
-      // Parse to validate it's valid JSON
-      let geoJsonContent;
+      let parsed: unknown;
       try {
-        geoJsonContent = JSON.parse(geoJsonText.trim());
-      } catch (parseError) {
+        parsed = JSON.parse(geoJsonText.trim()) as unknown;
+      } catch {
         throw new Error('Invalid JSON. Please check the format.');
       }
 
-      // Validate it's GeoJSON
-      if (!geoJsonContent.type || (geoJsonContent.type !== 'FeatureCollection' && geoJsonContent.type !== 'Feature')) {
+      const geoJsonContent = parsed as { type?: string };
+      if (
+        !geoJsonContent.type ||
+        (geoJsonContent.type !== 'FeatureCollection' && geoJsonContent.type !== 'Feature')
+      ) {
         throw new Error('Content does not appear to be valid GeoJSON (should be FeatureCollection or Feature)');
       }
 
       const request: SaveTrackGeoJsonRequest = {
-        geoJsonContent: geoJsonContent, // Send as object, not string
+        geoJsonContent: parsed as object,
         trackName: trackName.trim(),
       };
 
@@ -120,7 +122,9 @@ export const GeoJsonUploadModal = ({
                 <Text>Track Name</Text>
                 <Textfield
                   value={trackName}
-                  onChange={(e) => setTrackName(e.target.value)}
+                  onChange={(e) =>
+                    setTrackName(String((e as { target?: { value?: string } }).target?.value ?? ''))
+                  }
                   placeholder="e.g., Silverstone, Monaco, Monza"
                   isDisabled={isLoading}
                 />
@@ -131,7 +135,9 @@ export const GeoJsonUploadModal = ({
                 <TextArea
                   name="geojson-content"
                   value={geoJsonText}
-                  onChange={(e) => setGeoJsonText(e.target.value)}
+                  onChange={(e) =>
+                    setGeoJsonText(String((e as { target?: { value?: string } }).target?.value ?? ''))
+                  }
                   placeholder='Paste GeoJSON content here, e.g., {"type": "FeatureCollection", "features": [...]}'
                   isDisabled={isLoading}
                   minimumRows={10}
@@ -149,7 +155,9 @@ export const GeoJsonUploadModal = ({
               Cancel
             </Button>
             <Button
-              onClick={handleUpload}
+              onClick={() => {
+                void handleUpload();
+              }}
               appearance="primary"
               isDisabled={isLoading || !geoJsonText.trim() || !trackName.trim()}
             >

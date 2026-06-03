@@ -42,13 +42,32 @@ After a phase merges to `main`:
    git push origin v0.0.N
    ```
 
-5. Publish the GitHub Release:
+5. Push the tag — a [GitHub Actions workflow](.github/workflows/release.yml) creates the Release automatically:
+
+   ```bash
+   git push origin v0.0.N
+   ```
+
+   Optional: add `RELEASE_NOTES_v0.0.N.md` before tagging for custom release text. Otherwise notes are taken from the matching `CHANGELOG.md` section, or a short default.
+
+   To publish manually instead (workflow disabled or tag pushed before the workflow existed):
 
    ```bash
    gh release create v0.0.N --title "v0.0.N — Phase N" --notes-file RELEASE_NOTES_v0.0.N.md
    ```
 
-When Phase 7 is complete, bump to `1.0.0`, tag `v1.0.0`, and publish the stable release.
+When Phase 7 is complete, bump to `1.0.0`, tag `v1.0.0`, and push — the workflow marks `v1.0.0` as the non-prerelease stable release.
+
+## Automated releases
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml) runs on tag push:
+
+| Tag pattern | Release title | Prerelease |
+|-------------|---------------|------------|
+| `v0.0.0` … `v0.0.7` | `v0.0.N — Phase N` | yes |
+| `v1.0.0` | `v1.0.0 — F1 Track Linker (stable)` | no |
+
+Tags outside `v0.0.0`–`v0.0.7` and `v1.0.0` are rejected by the workflow. Re-pushing an existing tag does not re-run the workflow unless the tag is deleted and pushed again.
 
 ## Forge installs
 

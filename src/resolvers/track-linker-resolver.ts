@@ -1,4 +1,4 @@
-import Resolver from '@forge/resolver';
+import Resolver, { type Request } from '@forge/resolver';
 import { JiraService } from '../domain/services/jira-service';
 import {
   storeTrackLink,
@@ -22,10 +22,10 @@ import type {
   TrackLink,
 } from '../types';
 
-// Resolver request type based on Forge documentation
-type ResolverRequest<T = unknown> = {
-  payload?: T;
-  context?: Record<string, unknown>;
+type StoreTrackLinkPayload = {
+  issueKey: string;
+  viewport: TrackLink['viewport'];
+  svgSectionId?: string;
 };
 
 const resolver = new Resolver();
@@ -34,57 +34,53 @@ const jiraService = new JiraService();
 /**
  * Create JIRA issue with track section metadata
  */
-resolver.define('createTrackIssue', async (req: ResolverRequest<CreateTrackIssueRequest>): Promise<CreateTrackIssueResponse> => {
-  const payload = req.payload as CreateTrackIssueRequest;
+resolver.define(
+  'createTrackIssue',
+  async (req: Request<CreateTrackIssueRequest>): Promise<CreateTrackIssueResponse> => {
+    const { payload } = req;
 
-  if (!payload.summary || !payload.projectKey || !payload.issueType) {
-    throw new Error('Missing required fields: summary, projectKey, issueType');
-  }
-
-  // Create the JIRA issue
-  const issueResponse = await jiraService.createIssue(payload);
-
-  // Attach thumbnail if provided
-  if (payload.thumbnailData) {
-    try {
-      await jiraService.attachThumbnail({
-        issueKey: issueResponse.issueKey,
-        thumbnailData: payload.thumbnailData,
-        filename: `track-section-${issueResponse.issueKey}.png`,
-      });
-    } catch (error) {
-      console.error('Failed to attach thumbnail:', error);
-      // Continue even if thumbnail attachment fails
+    if (!payload.summary || !payload.projectKey || !payload.issueType) {
+      throw new Error('Missing required fields: summary, projectKey, issueType');
     }
-  }
 
-  // Store track link metadata
-  await storeTrackLink(issueResponse.issueKey, {
-    viewport: payload.viewport,
-    svgSectionId: payload.svgSectionId,
-  });
+    const issueResponse = await jiraService.createIssue(payload);
 
-  return issueResponse;
-});
+    if (payload.thumbnailData) {
+      try {
+        await jiraService.attachThumbnail({
+          issueKey: issueResponse.issueKey,
+          thumbnailData: payload.thumbnailData,
+          filename: `track-section-${issueResponse.issueKey}.png`,
+        });
+      } catch (error) {
+        console.error('Failed to attach thumbnail:', error);
+      }
+    }
 
-/**
- * Attach thumbnail to existing issue
- */
-resolver.define('attachTrackThumbnail', async (req: ResolverRequest<ThumbnailAttachmentRequest>): Promise<void> => {
-  const payload = req.payload as ThumbnailAttachmentRequest;
+    await storeTrackLink(issueResponse.issueKey, {
+      viewport: payload.viewport,
+      svgSectionId: payload.svgSectionId,
+    });
 
-  if (!payload.issueKey || !payload.thumbnailData) {
-    throw new Error('Missing required fields: issueKey, thumbnailData');
-  }
+    return issueResponse;
+  },
+);
 
-  await jiraService.attachThumbnail(payload);
-});
+resolver.define(
+  'attachTrackThumbnail',
+  async (req: Request<ThumbnailAttachmentRequest>): Promise<void> => {
+    const { payload } = req;
 
-/**
- * Store track link metadata
- */
-resolver.define('storeTrackLink', async (req: ResolverRequest<{ issueKey: string; viewport: TrackLink['viewport']; svgSectionId?: string }>): Promise<void> => {
-  const payload = req.payload as { issueKey: string; viewport: TrackLink['viewport']; svgSectionId?: string };
+    if (!payload.issueKey || !payload.thumbnailData) {
+      throw new Error('Missing required fields: issueKey, thumbnailData');
+    }
+
+    await jiraService.attachThumbnail(payload);
+  },
+);
+
+resolver.define('storeTrackLink', async (req: Request<StoreTrackLinkPayload>): Promise<void> => {
+  const { payload } = req;
 
   if (!payload.issueKey || !payload.viewport) {
     throw new Error('Missing required fields: issueKey, viewport');
@@ -96,11 +92,8 @@ resolver.define('storeTrackLink', async (req: ResolverRequest<{ issueKey: string
   });
 });
 
-/**
- * Get track link for a specific issue
- */
-resolver.define('getTrackLink', async (req: ResolverRequest<{ issueKey: string }>): Promise<TrackLink | null> => {
-  const payload = req.payload as { issueKey: string };
+resolver.define('getTrackLink', async (req: Request<{ issueKey: string }>): Promise<TrackLink | null> => {
+  const { payload } = req;
 
   if (!payload.issueKey) {
     throw new Error('Missing required field: issueKey');
@@ -109,29 +102,25 @@ resolver.define('getTrackLink', async (req: ResolverRequest<{ issueKey: string }
   return await getTrackLink(payload.issueKey);
 });
 
-/**
- * Get track SVG from storage
- */
-resolver.define('getTrackSvg', async (req?: ResolverRequest<{ trackId?: string }>): Promise<GetTrackSvgResponse | null> => {
-  const payload = req?.payload as { trackId?: string } | undefined;
-  const trackSvg = await getTrackSvg(payload?.trackId);
+resolver.define(
+  'getTrackSvg',
+  async (req: Request<{ trackId?: string }>): Promise<GetTrackSvgResponse | null> => {
+    const trackSvg = await getTrackSvg(req.payload?.trackId);
 
-  if (!trackSvg) {
-    return null;
-  }
+    if (!trackSvg) {
+      return null;
+    }
 
-  return {
-    svgContent: trackSvg.svgContent,
-    trackName: trackSvg.trackName,
-    uploadedAt: trackSvg.uploadedAt,
-  };
-});
+    return {
+      svgContent: trackSvg.svgContent,
+      trackName: trackSvg.trackName,
+      uploadedAt: trackSvg.uploadedAt,
+    };
+  },
+);
 
-/**
- * Save track SVG to storage
- */
-resolver.define('saveTrackSvg', async (req: ResolverRequest<SaveTrackSvgRequest>): Promise<void> => {
-  const payload = req.payload as SaveTrackSvgRequest;
+resolver.define('saveTrackSvg', async (req: Request<SaveTrackSvgRequest>): Promise<void> => {
+  const { payload } = req;
 
   if (!payload.svgContent || !payload.trackName) {
     throw new Error('Missing required fields: svgContent, trackName');
@@ -140,39 +129,34 @@ resolver.define('saveTrackSvg', async (req: ResolverRequest<SaveTrackSvgRequest>
   await saveTrackSvg(payload);
 });
 
-/**
- * Get theme configuration
- */
-resolver.define('getTheme', async (req?: ResolverRequest<{ userId?: string }>): Promise<{ primaryColor: string; secondaryColor: string; accentColor: string; teamName?: string } | null> => {
-  const payload = req?.payload as { userId?: string } | undefined;
-  const theme = await getTheme(payload?.userId);
+resolver.define(
+  'getTheme',
+  async (
+    req: Request<{ userId?: string }>,
+  ): Promise<{ primaryColor: string; secondaryColor: string; accentColor: string; teamName?: string } | null> => {
+    return await getTheme(req.payload?.userId);
+  },
+);
 
-  return theme;
-});
+resolver.define(
+  'getTrackGeoJson',
+  async (req: Request<{ trackId?: string }>): Promise<GetTrackGeoJsonResponse | null> => {
+    const trackGeoJson = await getTrackGeoJson(req.payload?.trackId);
 
-/**
- * Get track GeoJSON from storage
- */
-resolver.define('getTrackGeoJson', async (req?: ResolverRequest<{ trackId?: string }>): Promise<GetTrackGeoJsonResponse | null> => {
-  const payload = req?.payload as { trackId?: string } | undefined;
-  const trackGeoJson = await getTrackGeoJson(payload?.trackId);
+    if (!trackGeoJson) {
+      return null;
+    }
 
-  if (!trackGeoJson) {
-    return null;
-  }
+    return {
+      geoJsonContent: trackGeoJson.geoJsonContent,
+      trackName: trackGeoJson.trackName,
+      uploadedAt: trackGeoJson.uploadedAt,
+    };
+  },
+);
 
-  return {
-    geoJsonContent: trackGeoJson.geoJsonContent,
-    trackName: trackGeoJson.trackName,
-    uploadedAt: trackGeoJson.uploadedAt,
-  };
-});
-
-/**
- * Save track GeoJSON to storage
- */
-resolver.define('saveTrackGeoJson', async (req: ResolverRequest<SaveTrackGeoJsonRequest>): Promise<void> => {
-  const payload = req.payload as SaveTrackGeoJsonRequest;
+resolver.define('saveTrackGeoJson', async (req: Request<SaveTrackGeoJsonRequest>): Promise<void> => {
+  const { payload } = req;
 
   if (!payload.geoJsonContent || !payload.trackName) {
     throw new Error('Missing required fields: geoJsonContent, trackName');
@@ -181,11 +165,8 @@ resolver.define('saveTrackGeoJson', async (req: ResolverRequest<SaveTrackGeoJson
   await saveTrackGeoJson(payload);
 });
 
-/**
- * Save theme configuration
- */
-resolver.define('saveTheme', async (req: ResolverRequest<SaveThemeRequest>): Promise<void> => {
-  const payload = req.payload as SaveThemeRequest;
+resolver.define('saveTheme', async (req: Request<SaveThemeRequest>): Promise<void> => {
+  const { payload } = req;
 
   if (!payload.theme) {
     throw new Error('Missing required field: theme');
@@ -195,4 +176,3 @@ resolver.define('saveTheme', async (req: ResolverRequest<SaveThemeRequest>): Pro
 });
 
 export const handler = resolver.getDefinitions();
-

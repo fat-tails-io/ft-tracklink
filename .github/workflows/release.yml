@@ -1,0 +1,73 @@
+# Publishes a GitHub Release when a phase tag is pushed (v0.0.N or v1.0.0).
+# Maintainers: bump package.json + CHANGELOG, commit, tag, and push the tag only.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v0.0.*'
+      - 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Prepare release metadata
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+
+          if [ "$TAG" = "v1.0.0" ]; then
+            TITLE="${TAG} — F1 Track Linker (stable)"
+            PHASE_LABEL="complete product"
+          elif echo "$TAG" | grep -qE '^v0\.0\.[0-7]$'; then
+            PHASE="${TAG##*.}"
+            TITLE="${TAG} — Phase ${PHASE}"
+            PHASE_LABEL="Phase ${PHASE}"
+          else
+            echo "Unsupported tag pattern: ${TAG}"
+            exit 1
+          fi
+
+          NOTES_FILE="RELEASE_NOTES_${TAG}.md"
+          if [ -f "$NOTES_FILE" ]; then
+            BODY_FILE="$NOTES_FILE"
+          elif [ -f CHANGELOG.md ]; then
+            BODY_FILE="${RUNNER_TEMP}/release-body.md"
+            awk -v ver="$VERSION" '
+              BEGIN { found=0 }
+              $0 ~ "^## \\[" ver "\\]" { found=1; next }
+              found && /^## \\[/ { exit }
+              found { print }
+            ' CHANGELOG.md > "$BODY_FILE"
+            if [ ! -s "$BODY_FILE" ]; then
+              {
+                echo "## ${TAG}"
+                echo ""
+                echo "Release for **${PHASE_LABEL}**. See [CHANGELOG.md](CHANGELOG.md) and [VERSIONING.md](VERSIONING.md)."
+              } > "$BODY_FILE"
+            fi
+          else
+            BODY_FILE="${RUNNER_TEMP}/release-body.md"
+            echo "Release **${TAG}** (${PHASE_LABEL})." > "$BODY_FILE"
+          fi
+
+          echo "title=${TITLE}" >> "$GITHUB_OUTPUT"
+          echo "body_path=${BODY_FILE}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.meta.outputs.title }}
+          body_path: ${{ steps.meta.outputs.body_path }}
+          generate_release_notes: false
+          draft: false
+          prerelease: ${{ github.ref_name != 'v1.0.0' && startsWith(github.ref_name, 'v0.') }}

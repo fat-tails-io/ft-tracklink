@@ -38,7 +38,7 @@ export async function getTrackLink(issueKey: string): Promise<TrackSection | nul
 /**
  * Get all track links
  */
-export async function getAllTrackLinks(): Promise<TrackSection[]> {
+export function getAllTrackLinks(): Promise<TrackSection[]> {
   // Note: KVS doesn't support listing all keys directly
   // In a production app, you might maintain a separate index
   // For now, we'll need to track issue keys separately or use a different approach
