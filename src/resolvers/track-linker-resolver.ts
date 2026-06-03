@@ -10,6 +10,14 @@ import {
   saveTheme,
   getTheme,
 } from '../infrastructure/storage/track-link-storage';
+import {
+  deleteCircuit,
+  ensureCircuitCatalog,
+  getCircuitGeoJson,
+  resolveActiveCircuitId,
+  seedCircuitLibrary,
+  setLastCircuit,
+} from '../infrastructure/storage/circuit-catalog-storage';
 import type {
   CreateTrackIssueRequest,
   CreateTrackIssueResponse,
@@ -20,6 +28,11 @@ import type {
   GetTrackGeoJsonResponse,
   SaveThemeRequest,
   TrackLink,
+  ListCircuitsResponse,
+  GetCircuitGeoJsonRequest,
+  SeedCircuitLibraryResponse,
+  SetLastCircuitRequest,
+  CircuitCatalog,
 } from '../types';
 
 type StoreTrackLinkPayload = {
@@ -138,20 +151,75 @@ resolver.define(
   },
 );
 
-resolver.define(
-  'getTrackGeoJson',
-  async (req: Request<{ trackId?: string }>): Promise<GetTrackGeoJsonResponse | null> => {
-    const trackGeoJson = await getTrackGeoJson(req.payload?.trackId);
+const toGeoJsonResponse = (
+  trackGeoJson: Awaited<ReturnType<typeof getTrackGeoJson>>,
+  circuitId?: string,
+): GetTrackGeoJsonResponse | null => {
+  if (!trackGeoJson) {
+    return null;
+  }
+  return {
+    geoJsonContent: trackGeoJson.geoJsonContent,
+    trackName: trackGeoJson.trackName,
+    uploadedAt: trackGeoJson.uploadedAt,
+    circuitId,
+  };
+};
 
-    if (!trackGeoJson) {
-      return null;
+resolver.define('listCircuits', async (req: Request<{ accountId?: string }>): Promise<ListCircuitsResponse> => {
+  const catalog = await ensureCircuitCatalog();
+  const accountId = req.payload?.accountId;
+  const lastCircuitId = accountId ? await resolveActiveCircuitId(accountId) : catalog.defaultCircuitId;
+
+  return { catalog, lastCircuitId };
+});
+
+resolver.define(
+  'getCircuitGeoJson',
+  async (req: Request<GetCircuitGeoJsonRequest>): Promise<GetTrackGeoJsonResponse | null> => {
+    const { circuitId } = req.payload ?? {};
+    if (!circuitId) {
+      throw new Error('Missing required field: circuitId');
     }
 
-    return {
-      geoJsonContent: trackGeoJson.geoJsonContent,
-      trackName: trackGeoJson.trackName,
-      uploadedAt: trackGeoJson.uploadedAt,
-    };
+    const trackGeoJson = await getCircuitGeoJson(circuitId);
+    return toGeoJsonResponse(trackGeoJson, circuitId);
+  },
+);
+
+resolver.define(
+  'seedCircuitLibrary',
+  async (req: Request<{ forceGeo?: boolean }>): Promise<SeedCircuitLibraryResponse> => {
+    const result = await seedCircuitLibrary({ forceGeo: req.payload?.forceGeo });
+    return result;
+  },
+);
+
+resolver.define('setLastCircuit', async (req: Request<SetLastCircuitRequest>): Promise<void> => {
+  const { circuitId, accountId } = req.payload ?? {};
+  if (!circuitId) {
+    throw new Error('Missing required field: circuitId');
+  }
+  await setLastCircuit(circuitId, accountId);
+});
+
+resolver.define('deleteCircuit', async (req: Request<{ circuitId: string }>): Promise<CircuitCatalog> => {
+  const { circuitId } = req.payload ?? {};
+  if (!circuitId) {
+    throw new Error('Missing required field: circuitId');
+  }
+  return await deleteCircuit(circuitId);
+});
+
+resolver.define(
+  'getTrackGeoJson',
+  async (req: Request<{ trackId?: string; circuitId?: string; accountId?: string }>): Promise<GetTrackGeoJsonResponse | null> => {
+    const circuitId = req.payload?.circuitId ?? req.payload?.trackId;
+    const accountId = req.payload?.accountId;
+    const trackGeoJson = await getTrackGeoJson(circuitId, accountId);
+    const resolvedId = circuitId ?? (trackGeoJson ? await resolveActiveCircuitId(accountId) : undefined);
+
+    return toGeoJsonResponse(trackGeoJson, resolvedId);
   },
 );
 
@@ -160,6 +228,11 @@ resolver.define('saveTrackGeoJson', async (req: Request<SaveTrackGeoJsonRequest>
 
   if (!payload.geoJsonContent || !payload.trackName) {
     throw new Error('Missing required fields: geoJsonContent, trackName');
+  }
+
+  const circuitId = payload.circuitId ?? payload.trackId;
+  if (!circuitId) {
+    throw new Error('Missing required field: circuitId (or trackId)');
   }
 
   await saveTrackGeoJson(payload);

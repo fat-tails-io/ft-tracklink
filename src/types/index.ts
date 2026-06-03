@@ -1,5 +1,44 @@
 // Shared types for frontend-backend communication
 
+export interface CircuitSummary {
+  id: string;
+  name: string;
+  location: string;
+  lengthM?: number;
+  firstGp?: number;
+}
+
+export interface CircuitCatalog {
+  version: number;
+  circuits: CircuitSummary[];
+  defaultCircuitId?: string;
+}
+
+export interface UserTrackPreferences {
+  lastCircuitId?: string;
+  updatedAt: number;
+}
+
+export interface ListCircuitsResponse {
+  catalog: CircuitCatalog;
+  lastCircuitId?: string;
+}
+
+export interface GetCircuitGeoJsonRequest {
+  circuitId: string;
+}
+
+export interface SeedCircuitLibraryResponse {
+  seeded: string[];
+  skipped: string[];
+  catalog: CircuitCatalog;
+}
+
+export interface SetLastCircuitRequest {
+  circuitId: string;
+  accountId?: string;
+}
+
 export interface TrackViewport {
   x: number;
   y: number;
@@ -30,13 +69,19 @@ export interface TrackGeoJson {
 export interface SaveTrackGeoJsonRequest {
   geoJsonContent: string | object;
   trackName: string;
-  trackId?: string; // optional, defaults to 'default'
+  /** Circuit catalog id (e.g. gb-1948). Required for catalog uploads. */
+  trackId?: string;
+  circuitId?: string;
+  location?: string;
+  lengthM?: number;
+  firstGp?: number;
 }
 
 export interface GetTrackGeoJsonResponse {
   geoJsonContent: string | object;
   trackName: string;
   uploadedAt: number;
+  circuitId?: string;
 }
 
 export interface Theme {

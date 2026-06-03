@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useProductContext } from '@forge/react';
 import { TrackLinkerShell } from './TrackLinkerShell';
 import { SelectionSummaryPanel } from './components/SelectionSummaryPanel';
 import { CreateIssuePanel } from './components/CreateIssuePanel';
@@ -10,11 +11,15 @@ import { useIssueProductContext } from './hooks/useIssueProductContext';
 
 export const IssueTrackLinker = (): React.JSX.Element => {
   const { issueKey, projectKey } = useIssueProductContext();
+  const productContext = useProductContext();
+  const accountId = (productContext as { accountId?: string } | undefined)?.accountId;
 
   const {
     loading,
     trackLoaded,
     trackName,
+    circuits,
+    selectedCircuitId,
     uploadModalOpen,
     setUploadModalOpen,
     selectedSection,
@@ -24,35 +29,34 @@ export const IssueTrackLinker = (): React.JSX.Element => {
     viewerStatus,
     setViewerMode,
     loadTrack,
+    selectCircuit,
+    refreshCatalog,
     handleReset,
-  } = useTrackLinkerCore();
+  } = useTrackLinkerCore({ accountId });
 
   const {
     issueForm,
-    setIssueForm,
     isCreatingIssue,
     handleIssueFieldChange,
-    applyDefaultSummary,
+    resetIssueForm,
+    syncFormToSelection,
     handleCreateIssue,
   } = useCreateIssueFromSelection({
     trackName,
+    defaultProjectKey: projectKey,
     onIssueCreated: () => setSelectedSection(null),
   });
 
   useEffect(() => {
-    if (projectKey) {
-      setIssueForm((prev) => ({
-        ...prev,
-        projectKey,
-      }));
-    }
-  }, [projectKey, setIssueForm]);
-
-  useEffect(() => {
     if (selectedSection) {
-      applyDefaultSummary();
+      syncFormToSelection();
     }
-  }, [selectedSection, applyDefaultSummary]);
+  }, [selectedSection, syncFormToSelection]);
+
+  const handleResetAll = (): void => {
+    handleReset();
+    resetIssueForm();
+  };
 
   if (loading) {
     return <TrackLinkerLoading />;
@@ -65,15 +69,25 @@ export const IssueTrackLinker = (): React.JSX.Element => {
       pageHeading={pageHeading}
       trackLoaded={trackLoaded}
       trackName={trackName}
+      circuits={circuits}
+      selectedCircuitId={selectedCircuitId}
+      catalogLoading={loading}
+      onCircuitChange={(circuitId) => {
+        resetIssueForm();
+        void selectCircuit(circuitId);
+      }}
       uploadModalOpen={uploadModalOpen}
       viewerMode={viewerMode}
       viewerStatus={viewerStatus}
       onOpenUpload={() => setUploadModalOpen(true)}
       onCloseUpload={() => setUploadModalOpen(false)}
       onUploadSuccess={() => {
-        void loadTrack();
+        void (async () => {
+          const activeId = await refreshCatalog();
+          await loadTrack(activeId ?? selectedCircuitId);
+        })();
       }}
-      onReset={handleReset}
+      onReset={handleResetAll}
       onViewerModeChange={setViewerMode}
       showTrackAdminControls
       contextBanner={<IssueContextBanner issueKey={issueKey} projectKey={projectKey} />}
@@ -89,7 +103,10 @@ export const IssueTrackLinker = (): React.JSX.Element => {
         onCreateIssue={() => {
           void handleCreateIssue(selectedSection);
         }}
-        onClearSelection={() => setSelectedSection(null)}
+        onClearSelection={() => {
+          setSelectedSection(null);
+          resetIssueForm();
+        }}
       />
     </TrackLinkerShell>
   );

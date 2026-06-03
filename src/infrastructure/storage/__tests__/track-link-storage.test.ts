@@ -4,7 +4,6 @@ import {
   getTrackLink,
   deleteTrackLink,
   saveTrackGeoJson,
-  getTrackGeoJson,
 } from '../track-link-storage';
 import type { TrackSection } from '../../../types';
 
@@ -17,10 +16,23 @@ jest.mock('@forge/api', () => ({
 }));
 
 const mockedStorage = storage as jest.Mocked<typeof storage>;
+const memoryStore = new Map<string, unknown>();
 
 describe('track-link-storage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    memoryStore.clear();
+    mockedStorage.set.mockImplementation((key: string, value: unknown) => {
+      memoryStore.set(key, value);
+      return Promise.resolve();
+    });
+    mockedStorage.get.mockImplementation((key: string) =>
+      Promise.resolve((memoryStore.get(key) ?? null) as null),
+    );
+    mockedStorage.delete.mockImplementation((key: string) => {
+      memoryStore.delete(key);
+      return Promise.resolve();
+    });
   });
 
   describe('storeTrackLink / getTrackLink / deleteTrackLink', () => {
@@ -66,32 +78,40 @@ describe('track-link-storage', () => {
   });
 
   describe('saveTrackGeoJson / getTrackGeoJson', () => {
-    it('uses default track-geojson key when trackId is omitted', async () => {
+    it('requires circuitId when saving', async () => {
+      await expect(
+        saveTrackGeoJson({
+          trackName: 'Silverstone',
+          geoJsonContent: { type: 'FeatureCollection', features: [] },
+        }),
+      ).rejects.toThrow('circuitId');
+    });
+
+    it('uses per-circuit key when circuitId is provided', async () => {
       mockedStorage.set.mockResolvedValue(undefined);
+      mockedStorage.get.mockResolvedValue(null);
+
       await saveTrackGeoJson({
-        trackName: 'Silverstone',
-        geoJsonContent: { type: 'FeatureCollection', features: [] },
+        circuitId: 'ae-2009',
+        trackName: 'Yas Marina',
+        geoJsonContent: {
+          type: 'FeatureCollection',
+          features: [
+            {
+              type: 'Feature',
+              properties: { Name: 'Yas Marina Circuit', Location: 'Yas Marina' },
+              geometry: { type: 'LineString', coordinates: [[0, 0], [1, 1]] },
+            },
+          ],
+        },
       });
 
       expect(mockedStorage.set).toHaveBeenCalledWith(
-        'track-geojson',
+        'track-geojson-ae-2009',
         expect.objectContaining({
-          trackName: 'Silverstone',
-          uploadedAt: expect.any(Number) as number,
+          trackName: 'Yas Marina',
         }),
       );
-    });
-
-    it('uses per-circuit key when trackId is provided', async () => {
-      mockedStorage.get.mockResolvedValue({
-        geoJsonContent: '{"type":"FeatureCollection","features":[]}',
-        trackName: 'Yas Marina',
-        uploadedAt: 1,
-      });
-
-      await getTrackGeoJson('ae-2009');
-
-      expect(mockedStorage.get).toHaveBeenCalledWith('track-geojson-ae-2009');
     });
   });
 });

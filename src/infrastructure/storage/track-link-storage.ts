@@ -9,9 +9,21 @@ import type {
   SaveThemeRequest,
 } from '../../types';
 
+import {
+  extractCircuitSummary,
+  normalizeCircuitGeoJson,
+  parseGeoJsonContent,
+} from '../../domain/circuit/circuit-geojson';
+import {
+  getCircuitGeoJson,
+  migrateLegacyTrackGeoJson,
+  resolveActiveCircuitId,
+  saveCircuitGeoJson,
+  upsertCircuit,
+} from './circuit-catalog-storage';
+
 const TRACK_SECTION_PREFIX = 'track-section-';
 const TRACK_SVG_KEY = 'track-svg';
-const TRACK_GEOJSON_KEY = 'track-geojson';
 const THEME_KEY = 'app-theme';
 
 /**
@@ -76,26 +88,43 @@ export async function getTrackSvg(trackId?: string): Promise<TrackSvg | null> {
 }
 
 /**
- * Save GeoJSON file to storage
+ * Save GeoJSON to catalog storage (`track-geojson-{circuitId}`).
  */
 export async function saveTrackGeoJson(request: SaveTrackGeoJsonRequest): Promise<void> {
-  const key = request.trackId ? `track-geojson-${request.trackId}` : TRACK_GEOJSON_KEY;
-  const trackGeoJson: TrackGeoJson = {
-    geoJsonContent: typeof request.geoJsonContent === 'string' 
-      ? request.geoJsonContent 
-      : JSON.stringify(request.geoJsonContent),
-    trackName: request.trackName,
-    uploadedAt: Date.now(),
-  };
-  await storage.set(key, trackGeoJson as unknown as Record<string, unknown>);
+  const circuitId = request.circuitId ?? request.trackId;
+  if (!circuitId) {
+    throw new Error('circuitId (or trackId) is required — use the circuit catalog');
+  }
+
+  const parsed = parseGeoJsonContent(request.geoJsonContent);
+  const normalized = normalizeCircuitGeoJson(parsed, circuitId, false);
+  await saveCircuitGeoJson(circuitId, normalized, request.trackName);
+
+  const summary = extractCircuitSummary(circuitId, normalized, request.trackName);
+  await upsertCircuit({
+    ...summary,
+    location: request.location ?? summary.location,
+    lengthM: request.lengthM ?? summary.lengthM,
+    firstGp: request.firstGp ?? summary.firstGp,
+  });
 }
 
 /**
- * Get GeoJSON file from storage
+ * Get GeoJSON for a circuit. When circuitId omitted, uses last-used / catalog default.
  */
-export async function getTrackGeoJson(trackId?: string): Promise<TrackGeoJson | null> {
-  const key = trackId ? `track-geojson-${trackId}` : TRACK_GEOJSON_KEY;
-  return ((await storage.get(key)) as TrackGeoJson | null) || null;
+export async function getTrackGeoJson(
+  circuitId?: string,
+  accountId?: string,
+): Promise<TrackGeoJson | null> {
+  await migrateLegacyTrackGeoJson();
+
+  const resolvedId = circuitId ?? (await resolveActiveCircuitId(accountId));
+  const stored = await getCircuitGeoJson(resolvedId);
+  if (stored) {
+    return stored;
+  }
+
+  return null;
 }
 
 /**

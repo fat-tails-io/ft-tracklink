@@ -18,6 +18,7 @@ import {
 import { invoke, showFlag } from '@forge/bridge';
 import type { SaveTrackGeoJsonRequest } from '../../types';
 import { subtleTextXcss } from '../styles/shell-xcss';
+import { slugifyCircuitId } from '../utils/circuit-id';
 
 interface GeoJsonUploadModalProps {
   isOpen: boolean;
@@ -31,17 +32,20 @@ export const GeoJsonUploadModal = ({
   onSuccess,
 }: GeoJsonUploadModalProps): React.JSX.Element => {
   const [trackName, setTrackName] = useState<string>('');
+  const [circuitId, setCircuitId] = useState<string>('');
   const [geoJsonText, setGeoJsonText] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const handleUpload = async (): Promise<void> => {
-    if (!geoJsonText.trim() || !trackName.trim()) {
+    const resolvedCircuitId = (circuitId.trim() || slugifyCircuitId(trackName)).trim();
+
+    if (!geoJsonText.trim() || !trackName.trim() || !resolvedCircuitId) {
       showFlag({
         id: 'upload-error',
         title: 'Missing information',
         type: 'error',
         appearance: 'error',
-        description: 'Provide both a track name and GeoJSON content.',
+        description: 'Provide a track name, circuit id, and GeoJSON content.',
         isAutoDismiss: true,
       });
       return;
@@ -68,6 +72,7 @@ export const GeoJsonUploadModal = ({
       const request: SaveTrackGeoJsonRequest = {
         geoJsonContent: parsed as object,
         trackName: trackName.trim(),
+        circuitId: resolvedCircuitId,
       };
 
       await invoke('saveTrackGeoJson', request);
@@ -82,6 +87,7 @@ export const GeoJsonUploadModal = ({
       });
 
       setTrackName('');
+      setCircuitId('');
       setGeoJsonText('');
       onClose();
       setTimeout(() => {
@@ -105,6 +111,7 @@ export const GeoJsonUploadModal = ({
   const handleClose = (): void => {
     if (!isLoading) {
       setTrackName('');
+      setCircuitId('');
       setGeoJsonText('');
       onClose();
     }
@@ -115,21 +122,41 @@ export const GeoJsonUploadModal = ({
       {isOpen && (
         <Modal onClose={handleClose}>
           <ModalHeader>
-            <ModalTitle>Upload track GeoJSON</ModalTitle>
+            <ModalTitle>Add custom circuit</ModalTitle>
           </ModalHeader>
           <ModalBody>
             <Stack space="space.300">
               <Stack space="space.100">
-                <Label labelFor="upload-track-name">Track name</Label>
+                <Label labelFor="upload-track-name">Circuit name</Label>
                 <Textfield
                   id="upload-track-name"
                   value={trackName}
-                  onChange={(e) =>
-                    setTrackName(String((e as { target?: { value?: string } }).target?.value ?? ''))
-                  }
-                  placeholder="e.g. Silverstone, Monaco, Monza"
+                  onChange={(e) => {
+                    const next = String((e as { target?: { value?: string } }).target?.value ?? '');
+                    setTrackName(next);
+                    if (!circuitId.trim() && next.trim()) {
+                      setCircuitId(slugifyCircuitId(next));
+                    }
+                  }}
+                  placeholder="e.g. Silverstone Circuit"
                   isDisabled={isLoading}
                 />
+              </Stack>
+
+              <Stack space="space.100">
+                <Label labelFor="upload-circuit-id">Circuit id</Label>
+                <Textfield
+                  id="upload-circuit-id"
+                  value={circuitId}
+                  onChange={(e) =>
+                    setCircuitId(String((e as { target?: { value?: string } }).target?.value ?? ''))
+                  }
+                  placeholder="e.g. gb-1948"
+                  isDisabled={isLoading}
+                />
+                <Box xcss={subtleTextXcss}>
+                  <Text>Lowercase id used in storage (track-geojson-{'{id}'}).</Text>
+                </Box>
               </Stack>
 
               <Stack space="space.100">

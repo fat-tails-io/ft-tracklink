@@ -81,4 +81,29 @@ Replace `REPLACE-WITH-APP-ID` in `manifest.yml` with your Forge app id before de
 
 ---
 
-Future phases: `v0.0.3` … `v0.0.8`, then `v1.0.0` when the full roadmap ships.
+## [0.0.3] — Phase 3 multi-circuit library
+
+**Tag:** `v0.0.3`  
+**Roadmap:** Phase 3 — Circuit catalog, picker, and per-circuit GeoJSON storage
+
+### Added
+
+- **Circuit catalog KVS** — `circuit-catalog` index plus `track-geojson-{circuitId}` geometry keys ([`circuit-catalog-storage.ts`](src/infrastructure/storage/circuit-catalog-storage.ts))
+- **Resolvers** — `listCircuits`, `getCircuitGeoJson`, `seedCircuitLibrary`, `setLastCircuit`, `deleteCircuit` ([`track-linker-resolver.ts`](src/resolvers/track-linker-resolver.ts))
+- **Bundled circuits** — Silverstone (`gb-1948`) and Yas Marina (`ae-2009`) seeded on first load from [`src/data/tracks/`](src/data/tracks/) with enriched `corner` Point features
+- **UI** — [`CircuitPicker`](src/frontend/components/CircuitPicker.tsx) at top of [`TrackLinkerShell`](src/frontend/TrackLinkerShell.tsx); last-used circuit persisted via `setLastCircuit`
+- **Upload** — Custom circuits require `circuitId`; catalog entry updated on save ([`GeoJsonUploadModal.tsx`](src/frontend/components/GeoJsonUploadModal.tsx))
+- **Viewer** — Corner markers drawn for `role: corner` features ([`viewer.js`](resources/track-viewer/src/viewer.js))
+
+### Changed
+
+- **Migration** — Legacy single `track-geojson` key copied into catalog on read/seed, then removed
+- **`getTrackGeoJson` / `saveTrackGeoJson`** — Require `circuitId` (or `trackId` alias) for writes; reads resolve last-used or catalog default
+
+### Unchanged (by design)
+
+- Brush selection and create-issue flow unchanged (arc-length / link-to-issue in Phases 4–5)
+
+---
+
+Future phases: `v0.0.4` … `v0.0.8`, then `v1.0.0` when the full roadmap ships.

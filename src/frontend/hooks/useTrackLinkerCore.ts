@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { events, invoke, showFlag } from '@forge/bridge';
-import type { GetTrackGeoJsonResponse } from '../../types';
+import type {
+  CircuitSummary,
+  GetTrackGeoJsonResponse,
+  ListCircuitsResponse,
+} from '../../types';
 import type { TrackSelectionPayload } from '../types/track-selection';
 import { buildSelectionSummary } from '../utils/selection-format';
 import {
@@ -15,10 +19,16 @@ import {
   getStatusWhenNoTrack,
 } from '../utils/viewer-status';
 
+export type UseTrackLinkerCoreOptions = {
+  accountId?: string;
+};
+
 export type UseTrackLinkerCoreResult = {
   loading: boolean;
   trackLoaded: boolean;
   trackName: string;
+  circuits: CircuitSummary[];
+  selectedCircuitId: string | undefined;
   uploadModalOpen: boolean;
   setUploadModalOpen: (open: boolean) => void;
   selectedSection: TrackSelectionPayload | null;
@@ -27,7 +37,9 @@ export type UseTrackLinkerCoreResult = {
   viewerMode: ViewerInteractionMode;
   viewerStatus: string;
   setViewerMode: (mode: ViewerInteractionMode) => void;
-  loadTrack: () => Promise<void>;
+  loadTrack: (circuitId?: string) => Promise<void>;
+  selectCircuit: (circuitId: string) => Promise<void>;
+  refreshCatalog: () => Promise<string | undefined>;
   handleReset: () => void;
 };
 
@@ -38,10 +50,15 @@ const parseGeoJsonContent = (raw: string | object): unknown => {
   return raw;
 };
 
-export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
+export const useTrackLinkerCore = (
+  options: UseTrackLinkerCoreOptions = {},
+): UseTrackLinkerCoreResult => {
+  const { accountId } = options;
   const [loading, setLoading] = useState<boolean>(true);
   const [trackLoaded, setTrackLoaded] = useState<boolean>(false);
   const [trackName, setTrackName] = useState<string>('');
+  const [circuits, setCircuits] = useState<CircuitSummary[]>([]);
+  const [selectedCircuitId, setSelectedCircuitId] = useState<string | undefined>();
   const [uploadModalOpen, setUploadModalOpen] = useState<boolean>(false);
   const [frameReady, setFrameReady] = useState<boolean>(false);
   const [pendingGeoJson, setPendingGeoJson] = useState<unknown>(null);
@@ -49,7 +66,9 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
   const [viewerMode, setViewerModeState] = useState<ViewerInteractionMode>('pan');
   const [viewerStatus, setViewerStatus] = useState<string>(getStatusWhenNoTrack());
   const viewerModeRef = useRef<ViewerInteractionMode>(viewerMode);
+  const selectedCircuitIdRef = useRef<string | undefined>(selectedCircuitId);
   viewerModeRef.current = viewerMode;
+  selectedCircuitIdRef.current = selectedCircuitId;
 
   const syncViewerMode = useCallback((mode: ViewerInteractionMode): void => {
     const payload: ViewerSetModePayload = { mode };
@@ -63,6 +82,17 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
       syncViewerMode(mode);
     },
     [trackLoaded, syncViewerMode],
+  );
+
+  const emitGeoJson = useCallback(
+    (geoJsonContent: unknown): void => {
+      if (frameReady) {
+        void events.emit('GEOJSON_LOAD', { geoJsonContent });
+      } else {
+        setPendingGeoJson(geoJsonContent);
+      }
+    },
+    [frameReady],
   );
 
   useEffect(() => {
@@ -149,41 +179,87 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
     };
   }, []);
 
-  const loadTrack = useCallback(async (): Promise<void> => {
-    try {
-      const trackData = await invoke<GetTrackGeoJsonResponse | null>('getTrackGeoJson', {});
-      if (trackData?.geoJsonContent) {
-        const geoJsonContent = parseGeoJsonContent(trackData.geoJsonContent);
+  const refreshCatalog = useCallback(async (): Promise<string | undefined> => {
+    const listResponse = await invoke<ListCircuitsResponse>('listCircuits', { accountId });
+    setCircuits(listResponse.catalog.circuits);
 
-        setTrackLoaded(true);
-        setTrackName(trackData.trackName);
+    const activeId =
+      listResponse.lastCircuitId ??
+      listResponse.catalog.defaultCircuitId ??
+      listResponse.catalog.circuits[0]?.id;
 
-        if (frameReady) {
-          void events.emit('GEOJSON_LOAD', { geoJsonContent });
+    if (activeId) {
+      setSelectedCircuitId(activeId);
+      selectedCircuitIdRef.current = activeId;
+    }
+    return activeId;
+  }, [accountId]);
+
+  const loadTrack = useCallback(
+    async (circuitId?: string): Promise<void> => {
+      const id = circuitId ?? selectedCircuitIdRef.current;
+      if (!id) {
+        setTrackLoaded(false);
+        setViewerStatus(getStatusWhenNoTrack());
+        return;
+      }
+
+      try {
+        const trackData = await invoke<GetTrackGeoJsonResponse | null>('getTrackGeoJson', {
+          circuitId: id,
+          accountId,
+        });
+
+        if (trackData?.geoJsonContent) {
+          const geoJsonContent = parseGeoJsonContent(trackData.geoJsonContent);
+
+          setTrackLoaded(true);
+          setTrackName(trackData.trackName);
+          setSelectedCircuitId(trackData.circuitId ?? id);
+          emitGeoJson(geoJsonContent);
         } else {
-          setPendingGeoJson(geoJsonContent);
+          setTrackLoaded(false);
+          setViewerStatus(getStatusWhenNoTrack());
         }
-      } else {
+      } catch {
         setTrackLoaded(false);
         setViewerStatus(getStatusWhenNoTrack());
       }
-    } catch {
-      setTrackLoaded(false);
-      setViewerStatus(getStatusWhenNoTrack());
-    }
-  }, [frameReady]);
+    },
+    [accountId, emitGeoJson],
+  );
 
+  const selectCircuit = useCallback(
+    async (circuitId: string): Promise<void> => {
+      setSelectedCircuitId(circuitId);
+      setSelectedSection(null);
+      await invoke('setLastCircuit', { circuitId, accountId });
+      await loadTrack(circuitId);
+    },
+    [accountId, loadTrack],
+  );
+
+  const initRef = useRef(false);
   useEffect(() => {
+    if (initRef.current) {
+      return;
+    }
+    initRef.current = true;
+
     void (async () => {
       try {
-        await loadTrack();
+        await invoke('seedCircuitLibrary', {});
+        const activeId = await refreshCatalog();
+        if (activeId) {
+          await loadTrack(activeId);
+        }
       } catch (error) {
         console.error('Failed to initialize app:', error);
       } finally {
         setLoading(false);
       }
     })();
-  }, [loadTrack]);
+  }, [refreshCatalog, loadTrack]);
 
   useEffect(() => {
     if (!selectedSection) {
@@ -214,6 +290,8 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
     loading,
     trackLoaded,
     trackName,
+    circuits,
+    selectedCircuitId,
     uploadModalOpen,
     setUploadModalOpen,
     selectedSection,
@@ -223,6 +301,8 @@ export const useTrackLinkerCore = (): UseTrackLinkerCoreResult => {
     viewerStatus,
     setViewerMode,
     loadTrack,
+    selectCircuit,
+    refreshCatalog,
     handleReset,
   };
 };

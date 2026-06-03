@@ -1,6 +1,6 @@
 {
   "name": "ft-tracklink",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "F1 Track Linker - Forge JIRA app for linking track sections to issues",
   "main": "src/index.ts",
   "scripts": {

@@ -1,6 +1,6 @@
 # ft-tracklink - Validation Integration of Visual Assets for New Use Cases (Atlassian)
 
-`ft-tracklink` exists to validate a delivery strategy, not to showcase a hobby demo.
+`ft-tracklink` exists to validate a delivery strategy, for deeper integration of technical challenges in the physical and visual domains.
 
 This repository is a **Strategic Validation Lab**: practical evidence that leadership-level technology decisions can be tested close to implementation detail before they become portfolio-level delivery risk. It demonstrates hands-on capability as a senior director by combining commercial intent, operating model choices, and real Atlassian platform execution.
 

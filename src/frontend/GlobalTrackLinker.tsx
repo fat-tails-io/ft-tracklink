@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useProductContext } from '@forge/react';
 import { TrackLinkerShell } from './TrackLinkerShell';
 import { SelectionSummaryPanel } from './components/SelectionSummaryPanel';
 import { CreateIssuePanel } from './components/CreateIssuePanel';
@@ -7,10 +8,15 @@ import { useTrackLinkerCore } from './hooks/useTrackLinkerCore';
 import { useCreateIssueFromSelection } from './hooks/useCreateIssueFromSelection';
 
 export const GlobalTrackLinker = (): React.JSX.Element => {
+  const productContext = useProductContext();
+  const accountId = (productContext as { accountId?: string } | undefined)?.accountId;
+
   const {
     loading,
     trackLoaded,
     trackName,
+    circuits,
+    selectedCircuitId,
     uploadModalOpen,
     setUploadModalOpen,
     selectedSection,
@@ -20,14 +26,17 @@ export const GlobalTrackLinker = (): React.JSX.Element => {
     viewerStatus,
     setViewerMode,
     loadTrack,
+    selectCircuit,
+    refreshCatalog,
     handleReset,
-  } = useTrackLinkerCore();
+  } = useTrackLinkerCore({ accountId });
 
   const {
     issueForm,
     isCreatingIssue,
     handleIssueFieldChange,
-    applyDefaultSummary,
+    resetIssueForm,
+    syncFormToSelection,
     handleCreateIssue,
   } = useCreateIssueFromSelection({
     trackName,
@@ -36,9 +45,14 @@ export const GlobalTrackLinker = (): React.JSX.Element => {
 
   useEffect(() => {
     if (selectedSection) {
-      applyDefaultSummary();
+      syncFormToSelection();
     }
-  }, [selectedSection, applyDefaultSummary]);
+  }, [selectedSection, syncFormToSelection]);
+
+  const handleResetAll = (): void => {
+    handleReset();
+    resetIssueForm();
+  };
 
   if (loading) {
     return <TrackLinkerLoading />;
@@ -49,15 +63,25 @@ export const GlobalTrackLinker = (): React.JSX.Element => {
       pageHeading="Circuit map"
       trackLoaded={trackLoaded}
       trackName={trackName}
+      circuits={circuits}
+      selectedCircuitId={selectedCircuitId}
+      catalogLoading={loading}
+      onCircuitChange={(circuitId) => {
+        resetIssueForm();
+        void selectCircuit(circuitId);
+      }}
       uploadModalOpen={uploadModalOpen}
       viewerMode={viewerMode}
       viewerStatus={viewerStatus}
       onOpenUpload={() => setUploadModalOpen(true)}
       onCloseUpload={() => setUploadModalOpen(false)}
       onUploadSuccess={() => {
-        void loadTrack();
+        void (async () => {
+          const activeId = await refreshCatalog();
+          await loadTrack(activeId ?? selectedCircuitId);
+        })();
       }}
-      onReset={handleReset}
+      onReset={handleResetAll}
       onViewerModeChange={setViewerMode}
       showTrackAdminControls
     >
@@ -70,7 +94,10 @@ export const GlobalTrackLinker = (): React.JSX.Element => {
         onCreateIssue={() => {
           void handleCreateIssue(selectedSection);
         }}
-        onClearSelection={() => setSelectedSection(null)}
+        onClearSelection={() => {
+          setSelectedSection(null);
+          resetIssueForm();
+        }}
       />
     </TrackLinkerShell>
   );

@@ -230,19 +230,44 @@ function draw() {
   context.lineWidth = 3; // Thicker line
   context.fillStyle = 'rgba(0, 82, 204, 0.1)'; // Light blue fill for visibility
 
-  // Draw GeoJSON features
-  if (geoData.type === 'FeatureCollection') {
-    geoData.features.forEach(feature => {
+  // Draw GeoJSON features (centerline + optional corner points)
+  const drawFeature = (feature) => {
+    const role = feature.properties?.role;
+    const geomType = feature.geometry?.type;
+
+    if (geomType === 'Point' && role === 'corner') {
+      const projected = projection(feature.geometry.coordinates);
+      if (!projected) return;
+      const scale = currentTransform?.k ?? 1;
+      const radius = Math.max(3, 4 * scale);
       context.beginPath();
-      path(feature);
-      context.fill(); // Fill first
-      context.stroke(); // Then stroke
-    });
-  } else if (geoData.type === 'Feature') {
+      context.arc(projected[0], projected[1], radius, 0, 2 * Math.PI);
+      context.fillStyle = 'rgba(222, 53, 11, 0.85)';
+      context.fill();
+      context.strokeStyle = '#ffffff';
+      context.lineWidth = 1;
+      context.stroke();
+      context.fillStyle = 'rgba(0, 82, 204, 0.1)';
+      return;
+    }
+
     context.beginPath();
-    path(geoData);
-    context.fill(); // Fill first
-    context.stroke(); // Then stroke
+    path(feature);
+    if (role === 'centerline' || geomType === 'LineString') {
+      context.lineWidth = 3;
+      context.strokeStyle = '#1a1a1a';
+    }
+    context.fill();
+    context.stroke();
+    context.lineWidth = 3;
+    context.strokeStyle = '#1a1a1a';
+    context.fillStyle = 'rgba(0, 82, 204, 0.1)';
+  };
+
+  if (geoData.type === 'FeatureCollection') {
+    geoData.features.forEach(drawFeature);
+  } else if (geoData.type === 'Feature') {
+    drawFeature(geoData);
   }
 
   // Restore context

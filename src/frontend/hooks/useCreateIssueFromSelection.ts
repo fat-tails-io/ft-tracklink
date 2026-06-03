@@ -3,19 +3,22 @@ import { invoke, showFlag } from '@forge/bridge';
 import type { CreateTrackIssueResponse } from '../../types';
 import type { IssueFormState, TrackSelectionPayload } from '../types/track-selection';
 import { formatSelectionDetails } from '../utils/selection-format';
+import { buildDefaultSummary, DEFAULT_ISSUE_TYPE } from '../utils/issue-form-defaults';
 
 export type UseCreateIssueFromSelectionOptions = {
   trackName: string;
+  defaultProjectKey?: string;
   onIssueCreated?: () => void;
 };
 
 export const useCreateIssueFromSelection = ({
   trackName,
+  defaultProjectKey,
   onIssueCreated,
 }: UseCreateIssueFromSelectionOptions) => {
   const [issueForm, setIssueForm] = useState<IssueFormState>({
-    projectKey: '',
-    issueType: 'Task',
+    projectKey: defaultProjectKey ?? '',
+    issueType: DEFAULT_ISSUE_TYPE,
     summary: '',
     description: '',
   });
@@ -28,10 +31,20 @@ export const useCreateIssueFromSelection = ({
     }));
   }, []);
 
-  const applyDefaultSummary = useCallback((): void => {
+  const resetIssueForm = useCallback((): void => {
+    setIssueForm((prev) => ({
+      projectKey: defaultProjectKey ?? prev.projectKey,
+      issueType: prev.issueType || DEFAULT_ISSUE_TYPE,
+      summary: '',
+      description: '',
+    }));
+  }, [defaultProjectKey]);
+
+  const syncFormToSelection = useCallback((): void => {
     setIssueForm((prev) => ({
       ...prev,
-      summary: prev.summary || `Track section - ${trackName || 'Track'}`,
+      summary: buildDefaultSummary(trackName),
+      description: '',
     }));
   }, [trackName]);
 
@@ -103,7 +116,8 @@ export const useCreateIssueFromSelection = ({
     setIssueForm,
     isCreatingIssue,
     handleIssueFieldChange,
-    applyDefaultSummary,
+    resetIssueForm,
+    syncFormToSelection,
     handleCreateIssue,
   };
 };
