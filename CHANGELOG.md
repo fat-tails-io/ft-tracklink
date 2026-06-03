@@ -99,10 +99,27 @@ Replace `REPLACE-WITH-APP-ID` in `manifest.yml` with your Forge app id before de
 
 - **Migration** — Legacy single `track-geojson` key copied into catalog on read/seed, then removed
 - **`getTrackGeoJson` / `saveTrackGeoJson`** — Require `circuitId` (or `trackId` alias) for writes; reads resolve last-used or catalog default
+- **Forge bundle** — Bundled tracks imported as [`src/data/tracks/*.json`](src/data/tracks/) (`.geojson` imports fail Forge deploy webpack)
+- **Create-issue form** — Summary and description refresh on new brush; **Reset view**, circuit change, and **Clear selection** reset form defaults ([`useCreateIssueFromSelection`](src/frontend/hooks/useCreateIssueFromSelection.ts))
 
 ### Unchanged (by design)
 
-- Brush selection and create-issue flow unchanged (arc-length / link-to-issue in Phases 4–5)
+- Brush still uses map rectangle → geo corners (arc-length / `trackRelative` in Phase 4)
+- No link-to-current issue or Jira custom fields (Phases 5–6)
+
+### Install note
+
+Set your Forge `app.id` in [`manifest.yml`](manifest.yml). Build and deploy:
+
+```bash
+npm run build
+npm run forge:deploy
+npm run forge:install:upgrade
+```
+
+Sync authoring GeoJSON to bundle JSON before deploy when adding bundled circuits (see [`resources/tracks/README.md`](resources/tracks/README.md)).
+
+For a fuller walkthrough, see [RELEASE_NOTES_v0.0.3.md](RELEASE_NOTES_v0.0.3.md).
 
 ---
 
