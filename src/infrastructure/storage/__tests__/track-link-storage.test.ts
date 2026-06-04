@@ -1,11 +1,13 @@
 import { storage } from '@forge/api';
 import {
-  storeTrackLink,
+  appendTrackLink,
+  getIssueTrackLinks,
   getTrackLink,
   deleteTrackLink,
   saveTrackGeoJson,
+  TrackLinkLimitError,
 } from '../track-link-storage';
-import type { TrackSection } from '../../../types';
+import { MAX_TRACK_LINKS_PER_ISSUE } from '../../../domain/track-link/constants';
 
 jest.mock('@forge/api', () => ({
   storage: {
@@ -35,45 +37,68 @@ describe('track-link-storage', () => {
     });
   });
 
-  describe('storeTrackLink / getTrackLink / deleteTrackLink', () => {
-    const section: Omit<TrackSection, 'issueKey' | 'createdAt'> = {
-      viewport: { x: 0, y: 0, width: 100, height: 50, scale: 1 },
-    };
+  const baseEntry = {
+    circuitId: 'gb-1948',
+    viewport: { x: 0, y: 0, width: 100, height: 50, scale: 1 },
+    trackRelative: {
+      startDistanceM: 100,
+      endDistanceM: 200,
+      segmentLengthM: 100,
+      totalCircuitLengthM: 5000,
+    },
+  };
 
-    it('stores and retrieves a track link by issue key', async () => {
-      mockedStorage.set.mockResolvedValue(undefined);
-      mockedStorage.get.mockResolvedValue({
-        ...section,
-        issueKey: 'F1-42',
+  describe('appendTrackLink / getIssueTrackLinks', () => {
+    it('appends multiple links up to the cap', async () => {
+      await appendTrackLink('F1-42', baseEntry);
+      await appendTrackLink('F1-42', {
+        ...baseEntry,
+        trackRelative: {
+          startDistanceM: 500,
+          endDistanceM: 600,
+          segmentLengthM: 100,
+        },
+      });
+
+      const bundle = await getIssueTrackLinks('F1-42');
+      expect(bundle?.links).toHaveLength(2);
+      expect(bundle?.links[0].linkIndex).toBe(0);
+      expect(bundle?.links[1].linkIndex).toBe(1);
+    });
+
+    it('throws when max links reached', async () => {
+      for (let i = 0; i < MAX_TRACK_LINKS_PER_ISSUE; i += 1) {
+        await appendTrackLink('F1-99', baseEntry);
+      }
+
+      await expect(appendTrackLink('F1-99', baseEntry)).rejects.toBeInstanceOf(TrackLinkLimitError);
+    });
+
+    it('migrates legacy single TrackSection on read', async () => {
+      memoryStore.set('track-section-F1-legacy', {
+        issueKey: 'F1-legacy',
+        viewport: baseEntry.viewport,
+        circuitId: 'ae-2009',
         createdAt: 1_700_000_000_000,
       });
 
-      await storeTrackLink('F1-42', section);
-
-      expect(mockedStorage.set).toHaveBeenCalledWith(
-        'track-section-F1-42',
-        expect.objectContaining({
-          issueKey: 'F1-42',
-          viewport: section.viewport,
-          createdAt: expect.any(Number) as number,
-        }),
-      );
-
-      const link = await getTrackLink('F1-42');
-      expect(mockedStorage.get).toHaveBeenCalledWith('track-section-F1-42');
-      expect(link?.issueKey).toBe('F1-42');
+      const bundle = await getIssueTrackLinks('F1-legacy');
+      expect(bundle?.links).toHaveLength(1);
+      expect(bundle?.links[0].circuitId).toBe('ae-2009');
     });
 
-    it('returns null when no link exists', async () => {
-      mockedStorage.get.mockResolvedValue(null);
-      const link = await getTrackLink('F1-99');
-      expect(link).toBeNull();
+    it('getTrackLink returns first link for backward compatibility', async () => {
+      await appendTrackLink('F1-42', baseEntry);
+      const legacy = await getTrackLink('F1-42');
+      expect(legacy?.issueKey).toBe('F1-42');
+      expect(legacy?.circuitId).toBe('gb-1948');
     });
 
-    it('deletes a track link by issue key', async () => {
-      mockedStorage.delete.mockResolvedValue(undefined);
+    it('deletes all links for an issue', async () => {
+      await appendTrackLink('F1-42', baseEntry);
       await deleteTrackLink('F1-42');
-      expect(mockedStorage.delete).toHaveBeenCalledWith('track-section-F1-42');
+      const bundle = await getIssueTrackLinks('F1-42');
+      expect(bundle).toBeNull();
     });
   });
 

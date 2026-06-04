@@ -5,18 +5,19 @@ import { trackMetaXcss } from '../styles/shell-xcss';
 export interface IssueContextBannerProps {
   issueKey?: string;
   projectKey?: string;
+  issueSummary?: string;
 }
 
 export const IssueContextBanner = ({
   issueKey,
   projectKey,
+  issueSummary,
 }: IssueContextBannerProps): React.JSX.Element => {
   if (!issueKey) {
     return (
       <SectionMessage appearance="warning" title="Issue context unavailable">
         <Text>
-          Link-to-current-issue flows arrive in Phase 5. You can still brush-select and create a
-          linked issue from this view.
+          Open Track Linker from a Jira issue action to link brush selections to that issue.
         </Text>
       </SectionMessage>
     );
@@ -25,7 +26,10 @@ export const IssueContextBanner = ({
   return (
     <Stack space="space.100">
       <Box xcss={trackMetaXcss}>
-        <Text>Current issue: {issueKey}</Text>
+        <Text>
+          Current issue: {issueKey}
+          {issueSummary ? ` — ${issueSummary}` : ''}
+        </Text>
       </Box>
       {projectKey && (
         <Box xcss={trackMetaXcss}>

@@ -18,6 +18,7 @@ import {
   sampleSegmentPoints,
   segmentScreenBounds,
   selectSegmentFromBrush,
+  selectSegmentFromDistanceRange,
 } from './track-geometry';
 
 let width, height;
@@ -583,6 +584,34 @@ function generateThumbnail(viewport) {
   });
 }
 
+function applyHighlightFromPayload(eventData) {
+  if (!eventData?.trackRelative || !trackGeometryIndex) {
+    activeTrackSegment = null;
+    if (geoData) {
+      draw();
+    }
+    return;
+  }
+
+  const { startDistanceM, endDistanceM } = eventData.trackRelative;
+  const segment = selectSegmentFromDistanceRange(
+    trackGeometryIndex,
+    startDistanceM,
+    endDistanceM,
+  );
+
+  activeTrackSegment = segment;
+  if (geoData) {
+    draw();
+  }
+
+  if (segment) {
+    updateStatus(
+      `Showing saved segment ${startDistanceM.toFixed(0)}–${endDistanceM.toFixed(0)} m along track.`,
+    );
+  }
+}
+
 // Emit status to UI Kit (status line lives outside the Frame)
 function updateStatus(message) {
   try {
@@ -615,6 +644,7 @@ async function initForgeBridge() {
     const resetSubscription = await events.on('TRACK_RESET', () => {
       resetViewToDefault();
       setInteractionMode('pan');
+      activeTrackSegment = null;
       if (geoData) {
         updateProjection();
         draw();
@@ -627,12 +657,17 @@ async function initForgeBridge() {
       setInteractionMode(mode);
     });
 
+    const highlightSubscription = await events.on('HIGHLIGHT_SEGMENT', (eventData) => {
+      applyHighlightFromPayload(eventData);
+    });
+
     // Store subscriptions for cleanup if needed
     window._forgeSubscriptions = {
       geoJson: geoJsonSubscription,
       svg: svgSubscription,
       reset: resetSubscription,
       mode: modeSubscription,
+      highlight: highlightSubscription,
     };
   } catch (error) {
     console.error('Failed to initialize Forge bridge:', error);

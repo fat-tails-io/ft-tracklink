@@ -85,6 +85,10 @@ export const useCreateIssueFromSelection = ({
           description: combinedDescription || undefined,
           viewport: selectedSection.viewport,
           thumbnailData: selectedSection.thumbnailData || '',
+          circuitId: selectedSection.circuitId,
+          trackRelative: selectedSection.trackRelative,
+          geo: selectedSection.geo,
+          sampledPoints: selectedSection.sampledPoints,
         });
 
         showFlag({

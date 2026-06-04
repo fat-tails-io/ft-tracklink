@@ -47,11 +47,104 @@ export interface TrackViewport {
   scale: number;
 }
 
+/** @deprecated Legacy single-link shape; migrated to IssueTrackLinks on read. */
 export interface TrackSection {
   viewport: TrackViewport;
   svgSectionId?: string;
+  circuitId?: string;
+  trackRelative?: TrackRelativeSegment;
+  geo?: TrackSegmentEndpoints;
+  sampledPoints?: TrackSamplePoint[];
   issueKey: string;
   createdAt: number;
+}
+
+export interface TrackRelativeSegment {
+  startDistanceM: number;
+  endDistanceM: number;
+  segmentLengthM: number;
+  totalCircuitLengthM?: number;
+}
+
+export interface TrackSegmentEndpoints {
+  start: [number, number];
+  end: [number, number];
+  precision?: number;
+}
+
+export interface TrackSamplePoint {
+  distanceM: number;
+  lon: number;
+  lat: number;
+}
+
+export interface TrackLinkEntry {
+  linkId: string;
+  linkIndex: number;
+  circuitId: string;
+  viewport: TrackViewport;
+  trackRelative?: TrackRelativeSegment;
+  geo?: TrackSegmentEndpoints;
+  sampledPoints?: TrackSamplePoint[];
+  thumbnailFilename?: string;
+  commentId?: string;
+  createdAt: number;
+  /** @deprecated Legacy field on migrated entries */
+  svgSectionId?: string;
+}
+
+export interface IssueTrackLinks {
+  issueKey: string;
+  links: TrackLinkEntry[];
+  updatedAt: number;
+}
+
+export interface LinkSelectionToIssueRequest {
+  issueKey: string;
+  circuitId: string;
+  circuitDisplayName?: string;
+  viewport: TrackViewport;
+  trackRelative?: TrackRelativeSegment;
+  geo?: TrackSegmentEndpoints;
+  sampledPoints?: TrackSamplePoint[];
+  thumbnailData?: string;
+}
+
+export interface LinkSelectionToIssueResponse {
+  linkId: string;
+  linkIndex: number;
+  commentId?: string;
+  linkCount: number;
+  maxLinks: number;
+}
+
+export interface CreateLinkedTrackIssueRequest {
+  parentIssueKey: string;
+  projectKey: string;
+  summary: string;
+  description?: string;
+  circuitId: string;
+  circuitDisplayName?: string;
+  viewport: TrackViewport;
+  trackRelative?: TrackRelativeSegment;
+  geo?: TrackSegmentEndpoints;
+  sampledPoints?: TrackSamplePoint[];
+  thumbnailData?: string;
+}
+
+export interface CreateLinkedTrackIssueResponse {
+  issueKey: string;
+  linkId: string;
+  success: boolean;
+}
+
+export interface GetIssueTrackContextResponse {
+  issueKey: string;
+  summary: string;
+  links: TrackLinkEntry[];
+  linkCount: number;
+  maxLinks: number;
+  canAddLink: boolean;
 }
 
 export interface TrackSvg {
@@ -99,6 +192,10 @@ export interface CreateTrackIssueRequest {
   issueType: string;
   viewport: TrackViewport;
   thumbnailData: string; // base64 encoded image
+  circuitId?: string;
+  trackRelative?: TrackRelativeSegment;
+  geo?: TrackSegmentEndpoints;
+  sampledPoints?: TrackSamplePoint[];
   svgSectionId?: string;
 }
 
@@ -107,6 +204,7 @@ export interface CreateTrackIssueResponse {
   success: boolean;
 }
 
+/** @deprecated Use IssueTrackLinks / getIssueTrackLinks */
 export interface TrackLink {
   viewport: TrackViewport;
   svgSectionId?: string;

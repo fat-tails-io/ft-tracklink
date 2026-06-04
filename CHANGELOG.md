@@ -166,4 +166,46 @@ For a fuller walkthrough, see [RELEASE_NOTES_v0.0.4.md](RELEASE_NOTES_v0.0.4.md)
 
 ---
 
-Future phases: `v0.0.5` … `v0.0.8`, then `v1.0.0` when the full roadmap ships.
+## [0.0.5] — Phase 5 issue-centric workflow
+
+**Tag:** `v0.0.5`  
+**Roadmap:** Phase 5 — Link track segments to the current Jira issue (issue action primary path)
+
+### Added
+
+- **Issue action linking** — [`IssueLinkPanel`](src/frontend/components/IssueLinkPanel.tsx): primary **Link to {issueKey}**, **Create subtask** with segment, saved-segments list
+- **Resolvers** — `linkSelectionToIssue` (thumbnail + ADF **comment** + append KVS link), `createLinkedTrackIssue` (**Subtask** under parent), `getIssueTrackContext`
+- **Multi-link storage** — Up to **10** segments per issue (`IssueTrackLinks.links[]`); legacy single `TrackSection` migrated on read
+- **Viewer restore** — `HIGHLIGHT_SEGMENT` + `selectSegmentFromDistanceRange` in [`track-geometry.js`](resources/track-viewer/src/track-geometry.js)
+- **Bootstrap** — Issue action loads **most recent valid** linked circuit once; manual circuit picker is not overridden ([`issue-circuit-bootstrap.ts`](src/frontend/utils/issue-circuit-bootstrap.ts))
+- **Domain** — [`persist-issue-track-link.ts`](src/domain/track-link/persist-issue-track-link.ts), [`track-link-comment.ts`](src/domain/track-link/track-link-comment.ts) (ADF comment body)
+- **Tests** — Storage cap/migration, comment ADF builder, circuit bootstrap helper
+
+### Changed
+
+- [`IssueTrackLinker.tsx`](src/frontend/IssueTrackLinker.tsx) — Replaces create-issue-only flow on issue action; uses `accountId` for catalog/geo load
+- [`createTrackIssue`](src/resolvers/track-linker-resolver.ts) — May store `circuitId`, `trackRelative`, and geo on new issues when provided
+- [`IssueContextBanner`](src/frontend/components/IssueContextBanner.tsx) — Shows issue summary from context
+
+### Unchanged (by design)
+
+- Jira **custom fields** (Phase 6); global page still supports standalone create-issue
+- Option C dual persistence (comment + description/fields) — see Phase 5 cleanup in roadmap
+- **Issue action mop-up** (performance + layout polish) — [phase-5-issue-action-mopup.plan.md](.cursor/plans/phase-5-issue-action-mopup.plan.md)
+- Delete/edit link UI; Relates fallback when parent cannot take subtasks
+
+### Install note
+
+```bash
+npm run build
+forge deploy -e development
+forge install --upgrade   # if already installed
+```
+
+Parent issue type must support **Subtask** for “Create subtask with segment” (e.g. project FT).
+
+For a fuller walkthrough, see [RELEASE_NOTES_v0.0.5.md](RELEASE_NOTES_v0.0.5.md).
+
+---
+
+Future phases: `v0.0.6` … `v0.0.8`, then `v1.0.0` when the full roadmap ships.

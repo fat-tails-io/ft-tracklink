@@ -286,6 +286,61 @@ export function selectSegmentFromBrush(index, projection, brushRect, transform, 
 }
 
 /**
+ * Resolve a saved distance range to the same segment shape as brush selection.
+ * @param {ReturnType<typeof buildTrackGeometryIndex>} index
+ * @param {number} startDistanceM
+ * @param {number} endDistanceM
+ */
+export function selectSegmentFromDistanceRange(index, startDistanceM, endDistanceM) {
+  if (!index?.cumulativeM?.length) {
+    return null;
+  }
+
+  const { coordinates, cumulativeM, totalLengthM } = index;
+  const lo = Math.min(startDistanceM, endDistanceM);
+  const hi = Math.max(startDistanceM, endDistanceM);
+
+  let indexStart = 0;
+  let indexEnd = cumulativeM.length - 1;
+
+  for (let i = 0; i < cumulativeM.length; i += 1) {
+    if (cumulativeM[i] >= lo) {
+      indexStart = i;
+      break;
+    }
+  }
+
+  for (let i = cumulativeM.length - 1; i >= 0; i -= 1) {
+    if (cumulativeM[i] <= hi) {
+      indexEnd = i;
+      break;
+    }
+  }
+
+  if (indexEnd < indexStart) {
+    indexEnd = indexStart;
+  }
+
+  const start = coordinates[indexStart];
+  const end = coordinates[indexEnd];
+  const resolvedStartM = cumulativeM[indexStart];
+  const resolvedEndM = cumulativeM[indexEnd];
+
+  return {
+    start,
+    end,
+    startDistanceM: resolvedStartM,
+    endDistanceM: resolvedEndM,
+    totalCircuitLengthM: totalLengthM,
+    segmentLengthM: Math.max(0, resolvedEndM - resolvedStartM),
+    indexStart,
+    indexEnd,
+    coordinates,
+    cumulativeM,
+  };
+}
+
+/**
  * @param {ReturnType<typeof selectSegmentFromBrush>} segment
  * @param {number} [maxPoints]
  */

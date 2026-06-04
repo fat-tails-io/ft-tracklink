@@ -1,21 +1,26 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useProductContext } from '@forge/react';
 import { TrackLinkerShell } from './TrackLinkerShell';
 import { SelectionSummaryPanel } from './components/SelectionSummaryPanel';
-import { CreateIssuePanel } from './components/CreateIssuePanel';
 import { TrackLinkerLoading } from './components/TrackLinkerLoading';
 import { IssueContextBanner } from './components/IssueContextBanner';
+import { IssueLinkPanel } from './components/IssueLinkPanel';
 import { useTrackLinkerCore } from './hooks/useTrackLinkerCore';
-import { useCreateIssueFromSelection } from './hooks/useCreateIssueFromSelection';
 import { useIssueProductContext } from './hooks/useIssueProductContext';
+import { useIssueTrackContext } from './hooks/useIssueTrackContext';
+import { useIssueTrackActions } from './hooks/useIssueTrackActions';
+import { resolveCircuitIdFromLinks } from './utils/issue-circuit-bootstrap';
 
 export const IssueTrackLinker = (): React.JSX.Element => {
   const { issueKey, projectKey } = useIssueProductContext();
   const productContext = useProductContext();
   const accountId = (productContext as { accountId?: string } | undefined)?.accountId;
 
+  const issueBootstrapDoneRef = useRef(false);
+  const userPickedCircuitRef = useRef(false);
+
   const {
-    loading,
+    loading: coreLoading,
     trackLoaded,
     trackName,
     circuits,
@@ -32,37 +37,131 @@ export const IssueTrackLinker = (): React.JSX.Element => {
     selectCircuit,
     refreshCatalog,
     handleReset,
+    highlightSavedLink,
   } = useTrackLinkerCore({ accountId });
 
   const {
-    issueForm,
-    isCreatingIssue,
-    handleIssueFieldChange,
-    resetIssueForm,
-    syncFormToSelection,
-    handleCreateIssue,
-  } = useCreateIssueFromSelection({
+    loading: contextLoading,
+    summary,
+    links,
+    linkCount,
+    maxLinks,
+    canAddLink,
+    selectedLinkId,
+    setSelectedLinkId,
+    refresh: refreshIssueContext,
+  } = useIssueTrackContext({ issueKey });
+
+  const {
+    isLinking,
+    isCreatingSubtask,
+    subtaskSummary,
+    setSubtaskSummary,
+    handleLinkToIssue,
+    handleCreateSubtask,
+  } = useIssueTrackActions({
+    issueKey,
+    projectKey,
     trackName,
-    defaultProjectKey: projectKey,
-    onIssueCreated: () => setSelectedSection(null),
+    circuitId: selectedCircuitId,
+    onSuccess: async () => {
+      setSelectedSection(null);
+      await refreshIssueContext();
+    },
   });
 
+  /**
+   * Once core + issue context are ready: load the track for the most recent saved
+   * segment (if any). Does not run again when the user changes the circuit picker.
+   */
   useEffect(() => {
-    if (selectedSection) {
-      syncFormToSelection();
+    if (!issueKey || contextLoading || coreLoading || circuits.length === 0) {
+      return;
     }
-  }, [selectedSection, syncFormToSelection]);
+    if (issueBootstrapDoneRef.current) {
+      return;
+    }
+    issueBootstrapDoneRef.current = true;
+
+    const circuitFromLinks = resolveCircuitIdFromLinks(links, circuits);
+    if (!circuitFromLinks || userPickedCircuitRef.current) {
+      return;
+    }
+
+    if (circuitFromLinks !== selectedCircuitId) {
+      void selectCircuit(circuitFromLinks);
+    } else if (!trackLoaded) {
+      void loadTrack(circuitFromLinks);
+    }
+  }, [
+    issueKey,
+    contextLoading,
+    coreLoading,
+    circuits,
+    links,
+    selectedCircuitId,
+    trackLoaded,
+    selectCircuit,
+    loadTrack,
+  ]);
+
+  useEffect(() => {
+    if (!trackLoaded || contextLoading) {
+      return;
+    }
+
+    const link = links.find((l) => l.linkId === selectedLinkId);
+    if (link?.trackRelative) {
+      highlightSavedLink(link);
+    }
+  }, [trackLoaded, contextLoading, links, selectedLinkId, highlightSavedLink]);
 
   const handleResetAll = (): void => {
     handleReset();
-    resetIssueForm();
+    setSelectedSection(null);
+    highlightSavedLink(null);
   };
 
-  if (loading) {
+  const handleSelectLink = (linkId: string): void => {
+    setSelectedLinkId(linkId);
+    const link = links.find((l) => l.linkId === linkId);
+    if (!link) {
+      return;
+    }
+
+    const catalogCircuit = resolveCircuitIdFromLinks([link], circuits);
+    if (catalogCircuit && catalogCircuit !== selectedCircuitId) {
+      void selectCircuit(catalogCircuit);
+      return;
+    }
+    if (link.trackRelative) {
+      highlightSavedLink(link);
+    }
+  };
+
+  const handleCircuitChange = (circuitId: string): void => {
+    userPickedCircuitRef.current = true;
+    setSelectedSection(null);
+    void selectCircuit(circuitId);
+  };
+
+  const handleLinkSuccess = (): void => {
+    void (async () => {
+      await handleLinkToIssue(selectedSection);
+    })();
+  };
+
+  const handleSubtaskSuccess = (): void => {
+    void (async () => {
+      await handleCreateSubtask(selectedSection);
+    })();
+  };
+
+  if (coreLoading || (issueKey && contextLoading)) {
     return <TrackLinkerLoading />;
   }
 
-  const pageHeading = issueKey ? `Link track section — ${issueKey}` : 'Link track section';
+  const pageHeading = issueKey ? `Track Linker — ${issueKey}` : 'Track Linker';
 
   return (
     <TrackLinkerShell
@@ -71,11 +170,7 @@ export const IssueTrackLinker = (): React.JSX.Element => {
       trackName={trackName}
       circuits={circuits}
       selectedCircuitId={selectedCircuitId}
-      catalogLoading={loading}
-      onCircuitChange={(circuitId) => {
-        resetIssueForm();
-        void selectCircuit(circuitId);
-      }}
+      onCircuitChange={handleCircuitChange}
       uploadModalOpen={uploadModalOpen}
       viewerMode={viewerMode}
       viewerStatus={viewerStatus}
@@ -90,23 +185,27 @@ export const IssueTrackLinker = (): React.JSX.Element => {
       onReset={handleResetAll}
       onViewerModeChange={setViewerMode}
       showTrackAdminControls
-      contextBanner={<IssueContextBanner issueKey={issueKey} projectKey={projectKey} />}
+      contextBanner={
+        <IssueContextBanner issueKey={issueKey} projectKey={projectKey} issueSummary={summary} />
+      }
     >
       <SelectionSummaryPanel selectionSummary={selectionSummary} />
-      <CreateIssuePanel
-        issueForm={issueForm}
+      <IssueLinkPanel
+        issueKey={issueKey}
+        trackName={trackName}
         selectedSection={selectedSection}
-        isCreatingIssue={isCreatingIssue}
-        projectKeyReadOnly={Boolean(projectKey)}
-        heading="Create linked issue from selection"
-        onFieldChange={handleIssueFieldChange}
-        onCreateIssue={() => {
-          void handleCreateIssue(selectedSection);
-        }}
-        onClearSelection={() => {
-          setSelectedSection(null);
-          resetIssueForm();
-        }}
+        links={links}
+        linkCount={linkCount}
+        maxLinks={maxLinks}
+        canAddLink={canAddLink}
+        selectedLinkId={selectedLinkId}
+        isLinking={isLinking}
+        isCreatingSubtask={isCreatingSubtask}
+        subtaskSummary={subtaskSummary}
+        onSubtaskSummaryChange={setSubtaskSummary}
+        onLinkToIssue={handleLinkSuccess}
+        onCreateSubtask={handleSubtaskSuccess}
+        onSelectLink={handleSelectLink}
       />
     </TrackLinkerShell>
   );

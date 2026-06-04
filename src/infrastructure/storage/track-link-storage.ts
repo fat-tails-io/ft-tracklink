@@ -1,5 +1,8 @@
 import { storage } from '@forge/api';
+import { MAX_TRACK_LINKS_PER_ISSUE } from '../../domain/track-link/constants';
 import type {
+  IssueTrackLinks,
+  TrackLinkEntry,
   TrackSection,
   TrackSvg,
   TrackGeoJson,
@@ -26,25 +29,177 @@ const TRACK_SECTION_PREFIX = 'track-section-';
 const TRACK_SVG_KEY = 'track-svg';
 const THEME_KEY = 'app-theme';
 
-/**
- * Store link between track section and JIRA issue
- */
-export async function storeTrackLink(issueKey: string, section: Omit<TrackSection, 'issueKey' | 'createdAt'>): Promise<void> {
-  const key = `${TRACK_SECTION_PREFIX}${issueKey}`;
-  const trackSection: TrackSection = {
-    ...section,
+function storageKey(issueKey: string): string {
+  return `${TRACK_SECTION_PREFIX}${issueKey}`;
+}
+
+function isIssueTrackLinks(value: unknown): value is IssueTrackLinks {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as IssueTrackLinks).links)
+  );
+}
+
+/** Migrate legacy single TrackSection to IssueTrackLinks. */
+function normalizeStoredLinks(issueKey: string, raw: unknown): IssueTrackLinks | null {
+  if (!raw) {
+    return null;
+  }
+
+  if (isIssueTrackLinks(raw)) {
+    return {
+      issueKey: raw.issueKey || issueKey,
+      links: raw.links.map((link, index) => ({
+        ...link,
+        linkIndex: link.linkIndex ?? index,
+      })),
+      updatedAt: raw.updatedAt ?? Date.now(),
+    };
+  }
+
+  const legacy = raw as TrackSection;
+  if (!legacy.viewport) {
+    return null;
+  }
+
+  const linkId = `legacy-${legacy.createdAt ?? Date.now()}`;
+  return {
     issueKey,
-    createdAt: Date.now(),
+    links: [
+      {
+        linkId,
+        linkIndex: 0,
+        circuitId: legacy.circuitId ?? 'unknown',
+        viewport: legacy.viewport,
+        trackRelative: legacy.trackRelative,
+        geo: legacy.geo,
+        sampledPoints: legacy.sampledPoints,
+        svgSectionId: legacy.svgSectionId,
+        createdAt: legacy.createdAt ?? Date.now(),
+      },
+    ],
+    updatedAt: legacy.createdAt ?? Date.now(),
   };
-  await storage.set(key, trackSection as unknown as Record<string, unknown>);
+}
+
+export async function getIssueTrackLinks(issueKey: string): Promise<IssueTrackLinks | null> {
+  const raw: unknown = await storage.get(storageKey(issueKey));
+  return normalizeStoredLinks(issueKey, raw);
+}
+
+export type AppendTrackLinkInput = Omit<TrackLinkEntry, 'linkId' | 'linkIndex' | 'createdAt'>;
+
+export class TrackLinkLimitError extends Error {
+  constructor(
+    public readonly issueKey: string,
+    public readonly maxLinks: number,
+  ) {
+    super(`Issue ${issueKey} already has the maximum of ${maxLinks} track links.`);
+    this.name = 'TrackLinkLimitError';
+  }
 }
 
 /**
- * Get track link for a specific issue
+ * Append a track segment link to an issue (max {@link MAX_TRACK_LINKS_PER_ISSUE}).
+ */
+export async function appendTrackLink(
+  issueKey: string,
+  entry: AppendTrackLinkInput,
+): Promise<TrackLinkEntry> {
+  const existing = (await getIssueTrackLinks(issueKey)) ?? {
+    issueKey,
+    links: [],
+    updatedAt: Date.now(),
+  };
+
+  if (existing.links.length >= MAX_TRACK_LINKS_PER_ISSUE) {
+    throw new TrackLinkLimitError(issueKey, MAX_TRACK_LINKS_PER_ISSUE);
+  }
+
+  const linkId = crypto.randomUUID();
+  const linkIndex = existing.links.length;
+  const newEntry: TrackLinkEntry = {
+    ...entry,
+    linkId,
+    linkIndex,
+    createdAt: Date.now(),
+  };
+
+  const updated: IssueTrackLinks = {
+    issueKey,
+    links: [...existing.links, newEntry],
+    updatedAt: Date.now(),
+  };
+
+  await storage.set(storageKey(issueKey), updated as unknown as Record<string, unknown>);
+  return newEntry;
+}
+
+export async function patchTrackLink(
+  issueKey: string,
+  linkId: string,
+  patch: Partial<Pick<TrackLinkEntry, 'commentId' | 'thumbnailFilename'>>,
+): Promise<TrackLinkEntry | null> {
+  const bundle = await getIssueTrackLinks(issueKey);
+  if (!bundle) {
+    return null;
+  }
+
+  const index = bundle.links.findIndex((l) => l.linkId === linkId);
+  if (index < 0) {
+    return null;
+  }
+
+  const updatedLink: TrackLinkEntry = {
+    ...bundle.links[index],
+    ...patch,
+  };
+  const links = [...bundle.links];
+  links[index] = updatedLink;
+
+  await storage.set(storageKey(issueKey), {
+    issueKey,
+    links,
+    updatedAt: Date.now(),
+  } as unknown as Record<string, unknown>);
+
+  return updatedLink;
+}
+
+/**
+ * @deprecated Use appendTrackLink. Replaces entire record with a single legacy link.
+ */
+export async function storeTrackLink(issueKey: string, section: Omit<TrackSection, 'issueKey' | 'createdAt'>): Promise<void> {
+  await appendTrackLink(issueKey, {
+    circuitId: section.circuitId ?? 'unknown',
+    viewport: section.viewport,
+    trackRelative: section.trackRelative,
+    geo: section.geo,
+    sampledPoints: section.sampledPoints,
+    svgSectionId: section.svgSectionId,
+  });
+}
+
+/**
+ * @deprecated Use getIssueTrackLinks
  */
 export async function getTrackLink(issueKey: string): Promise<TrackSection | null> {
-  const key = `${TRACK_SECTION_PREFIX}${issueKey}`;
-  return ((await storage.get(key)) as TrackSection | null) || null;
+  const bundle = await getIssueTrackLinks(issueKey);
+  if (!bundle?.links.length) {
+    return null;
+  }
+  const first = bundle.links[0];
+  return {
+    issueKey,
+    viewport: first.viewport,
+    svgSectionId: first.svgSectionId,
+    circuitId: first.circuitId,
+    trackRelative: first.trackRelative,
+    geo: first.geo,
+    sampledPoints: first.sampledPoints,
+    createdAt: first.createdAt,
+  };
 }
 
 /**

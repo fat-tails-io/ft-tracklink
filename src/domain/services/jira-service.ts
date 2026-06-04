@@ -97,6 +97,64 @@ export class JiraService {
   /**
    * Get issue details (for validation)
    */
+  async addTrackLinkComment(
+    issueKey: string,
+    adfBody: { type: 'doc'; version: 1; content: object[] },
+  ): Promise<string | undefined> {
+    const response = await api.asUser().requestJira(route`/rest/api/3/issue/${issueKey}/comment`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({
+        body: adfBody,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to add Jira comment: ${response.status} ${errorText}`);
+    }
+
+    const data = (await response.json()) as { id?: string };
+    return data.id;
+  }
+
+  async createSubtaskIssue(params: {
+    parentIssueKey: string;
+    projectKey: string;
+    summary: string;
+    descriptionAdf?: { type: 'doc'; version: 1; content: object[] };
+  }): Promise<CreateTrackIssueResponse> {
+    const response = await api.asUser().requestJira(route`/rest/api/3/issue`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        fields: {
+          project: { key: params.projectKey },
+          parent: { key: params.parentIssueKey },
+          summary: params.summary,
+          issuetype: { name: 'Subtask' },
+          description: params.descriptionAdf,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to create subtask: ${response.status} ${errorText}`);
+    }
+
+    const issueData = (await response.json()) as { key: string };
+    return {
+      issueKey: issueData.key,
+      success: true,
+    };
+  }
+
   async getIssue(issueKey: string): Promise<{ key: string; fields: { summary: string } }> {
     const response = await api.asUser().requestJira(route`/rest/api/3/issue/${issueKey}`, {
       method: 'GET',

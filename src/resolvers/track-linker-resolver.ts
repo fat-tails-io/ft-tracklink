@@ -1,6 +1,9 @@
 import Resolver, { type Request } from '@forge/resolver';
 import { JiraService } from '../domain/services/jira-service';
+import { persistSelectionOnIssue } from '../domain/track-link/persist-issue-track-link';
+import { MAX_TRACK_LINKS_PER_ISSUE } from '../domain/track-link/constants';
 import {
+  getIssueTrackLinks,
   storeTrackLink,
   getTrackLink,
   saveTrackSvg,
@@ -28,6 +31,11 @@ import type {
   GetTrackGeoJsonResponse,
   SaveThemeRequest,
   TrackLink,
+  LinkSelectionToIssueRequest,
+  LinkSelectionToIssueResponse,
+  CreateLinkedTrackIssueRequest,
+  CreateLinkedTrackIssueResponse,
+  GetIssueTrackContextResponse,
   ListCircuitsResponse,
   GetCircuitGeoJsonRequest,
   SeedCircuitLibraryResponse,
@@ -73,6 +81,10 @@ resolver.define(
     await storeTrackLink(issueResponse.issueKey, {
       viewport: payload.viewport,
       svgSectionId: payload.svgSectionId,
+      circuitId: payload.circuitId,
+      trackRelative: payload.trackRelative,
+      geo: payload.geo,
+      sampledPoints: payload.sampledPoints,
     });
 
     return issueResponse;
@@ -114,6 +126,92 @@ resolver.define('getTrackLink', async (req: Request<{ issueKey: string }>): Prom
 
   return await getTrackLink(payload.issueKey);
 });
+
+resolver.define(
+  'getIssueTrackContext',
+  async (req: Request<{ issueKey: string }>): Promise<GetIssueTrackContextResponse> => {
+    const { issueKey } = req.payload ?? {};
+    if (!issueKey) {
+      throw new Error('Missing required field: issueKey');
+    }
+
+    const issue = await jiraService.getIssue(issueKey);
+    const bundle = await getIssueTrackLinks(issueKey);
+    const links = bundle?.links ?? [];
+    const linkCount = links.length;
+
+    return {
+      issueKey,
+      summary: issue.fields.summary,
+      links,
+      linkCount,
+      maxLinks: MAX_TRACK_LINKS_PER_ISSUE,
+      canAddLink: linkCount < MAX_TRACK_LINKS_PER_ISSUE,
+    };
+  },
+);
+
+resolver.define(
+  'linkSelectionToIssue',
+  async (req: Request<LinkSelectionToIssueRequest>): Promise<LinkSelectionToIssueResponse> => {
+    const { payload } = req;
+    if (!payload?.issueKey) {
+      throw new Error('Missing required field: issueKey');
+    }
+    return persistSelectionOnIssue(payload);
+  },
+);
+
+resolver.define(
+  'createLinkedTrackIssue',
+  async (req: Request<CreateLinkedTrackIssueRequest>): Promise<CreateLinkedTrackIssueResponse> => {
+    const { payload } = req;
+
+    if (!payload?.parentIssueKey || !payload.projectKey || !payload.summary) {
+      throw new Error('Missing required fields: parentIssueKey, projectKey, summary');
+    }
+    if (!payload.circuitId || !payload.viewport) {
+      throw new Error('Missing required fields: circuitId, viewport');
+    }
+
+    const descriptionAdf = payload.description
+      ? {
+          type: 'doc' as const,
+          version: 1 as const,
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: payload.description }],
+            },
+          ],
+        }
+      : undefined;
+
+    const subtask = await jiraService.createSubtaskIssue({
+      parentIssueKey: payload.parentIssueKey,
+      projectKey: payload.projectKey,
+      summary: payload.summary,
+      descriptionAdf,
+    });
+
+    const linkResult = await persistSelectionOnIssue({
+      issueKey: subtask.issueKey,
+      circuitId: payload.circuitId,
+      circuitDisplayName: payload.circuitDisplayName,
+      viewport: payload.viewport,
+      trackRelative: payload.trackRelative,
+      geo: payload.geo,
+      sampledPoints: payload.sampledPoints,
+      thumbnailData: payload.thumbnailData,
+    });
+
+    return {
+      issueKey: subtask.issueKey,
+      linkId: linkResult.linkId,
+      success: true,
+    };
+  },
+);
 
 resolver.define(
   'getTrackSvg',

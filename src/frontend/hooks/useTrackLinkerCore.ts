@@ -9,10 +9,12 @@ import type { TrackSelectionPayload } from '../types/track-selection';
 import { buildSelectionSummary } from '../utils/selection-format';
 import {
   VIEWER_EVENT,
+  type ViewerHighlightSegmentPayload,
   type ViewerInteractionMode,
   type ViewerSetModePayload,
   type ViewerStatusPayload,
 } from '../constants/viewer-events';
+import type { TrackLinkEntry } from '../../types';
 import {
   getStatusAfterSelection,
   getStatusForMode,
@@ -41,6 +43,7 @@ export type UseTrackLinkerCoreResult = {
   selectCircuit: (circuitId: string) => Promise<void>;
   refreshCatalog: () => Promise<string | undefined>;
   handleReset: () => void;
+  highlightSavedLink: (link: TrackLinkEntry | null) => void;
 };
 
 const parseGeoJsonContent = (raw: string | object): unknown => {
@@ -221,7 +224,8 @@ export const useTrackLinkerCore = (
           setTrackLoaded(false);
           setViewerStatus(getStatusWhenNoTrack());
         }
-      } catch {
+      } catch (error) {
+        console.error('Failed to load track geojson:', id, error);
         setTrackLoaded(false);
         setViewerStatus(getStatusWhenNoTrack());
       }
@@ -279,6 +283,23 @@ export const useTrackLinkerCore = (
     );
   }, [trackLoaded, syncViewerMode]);
 
+  const highlightSavedLink = useCallback((link: TrackLinkEntry | null): void => {
+    if (!link?.trackRelative) {
+      void events.emit(VIEWER_EVENT.HIGHLIGHT_SEGMENT, {} as ViewerHighlightSegmentPayload);
+      return;
+    }
+
+    const payload: ViewerHighlightSegmentPayload = {
+      circuitId: link.circuitId,
+      linkId: link.linkId,
+      trackRelative: {
+        startDistanceM: link.trackRelative.startDistanceM,
+        endDistanceM: link.trackRelative.endDistanceM,
+      },
+    };
+    void events.emit(VIEWER_EVENT.HIGHLIGHT_SEGMENT, payload);
+  }, []);
+
   const selectionSummary = useMemo(() => {
     if (!selectedSection) {
       return null;
@@ -304,5 +325,6 @@ export const useTrackLinkerCore = (
     selectCircuit,
     refreshCatalog,
     handleReset,
+    highlightSavedLink,
   };
 };
