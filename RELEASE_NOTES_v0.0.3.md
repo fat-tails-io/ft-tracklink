@@ -23,7 +23,7 @@ This release adds a **first-class circuit catalog**: pick Silverstone or Yas Mar
 ### UX refinements (same tag)
 
 - **Create Jira issue form** — summary/description reset on each new brush, circuit change, **Reset view**, and **Clear selection** (avoids stale Silverstone text when switching to Yas Marina).
-- **Sync tracks for deploy** — after editing `resources/tracks/*.geojson`, copy to `src/data/tracks/*.json` (see [`resources/tracks/README.md`](resources/tracks/README.md)).
+- **Sync tracks for deploy** — after editing `resources/tracks/*.geojson`, copy to `src/data/tracks/*.json` (see [`src/data/tracks/README.md`](src/data/tracks/README.md)).
 
 ### Verify in Jira
 

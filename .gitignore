@@ -1,3 +1,6 @@
+# Python dev venv (FastF1 ETL)
+.venv-dev/
+
 # Node Modules
 node_modules/
 resources/track-viewer/node_modules/

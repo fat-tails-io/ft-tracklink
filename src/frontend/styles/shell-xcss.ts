@@ -1,4 +1,5 @@
 import { xcss } from '@forge/react';
+import { MAP_VIEWER_HEIGHT } from '../constants/map-viewer';
 
 export const panelSurfaceXcss = xcss({
   padding: 'space.200',
@@ -11,8 +12,7 @@ export const panelSurfaceXcss = xcss({
 
 export const frameSurfaceXcss = xcss({
   width: '100%',
-  height: '600px',
-  backgroundColor: 'color.background.neutral',
+  height: MAP_VIEWER_HEIGHT,
   borderWidth: 'border.width',
   borderStyle: 'solid',
   borderColor: 'color.border',

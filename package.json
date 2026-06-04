@@ -1,6 +1,6 @@
 {
   "name": "ft-tracklink",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "F1 Track Linker - Forge JIRA app for linking track sections to issues",
   "main": "src/index.ts",
   "scripts": {
@@ -19,7 +19,8 @@
     "forge:install:upgrade": "forge install -e development --site fat-tails.atlassian.net --product jira --non-interactive --upgrade",
     "postinstall": "rm -f node_modules/react-hook-form/dist/watch.d.ts || true",
     "upload-svg": "tsc scripts/upload-svg.ts --outDir scripts --module commonjs --esModuleInterop --resolveJsonModule --skipLibCheck && node scripts/upload-svg.js",
-    "upload-geojson": "tsc scripts/upload-geojson.ts --outDir scripts --module commonjs --esModuleInterop --resolveJsonModule --skipLibCheck && node scripts/upload-geojson.js"
+    "upload-geojson": "tsc scripts/upload-geojson.ts --outDir scripts --module commonjs --esModuleInterop --resolveJsonModule --skipLibCheck && node scripts/upload-geojson.js",
+    "enrich:tracks": ".venv-dev/bin/python tools/transpose-circuit-detail.py --all-mapped && cp resources/tracks/gb-1948.geojson src/data/tracks/gb-1948.json && cp resources/tracks/ae-2009.geojson src/data/tracks/ae-2009.json"
   },
   "dependencies": {
     "@forge/api": "^3.1.0",

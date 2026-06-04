@@ -24,8 +24,12 @@ export const SelectionSummaryPanel = ({
             <Text>{selectionSummary.screen}</Text>
           </Stack>
           <Stack space="space.050">
-            <Heading size="small">Geographic bounds</Heading>
+            <Heading size="small">Segment (geo)</Heading>
             <Text>{selectionSummary.geo}</Text>
+          </Stack>
+          <Stack space="space.050">
+            <Heading size="small">Along track</Heading>
+            <Text>{selectionSummary.trackRelative}</Text>
           </Stack>
           <Stack space="space.050">
             <Heading size="small">Track properties</Heading>

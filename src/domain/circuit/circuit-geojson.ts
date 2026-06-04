@@ -48,9 +48,12 @@ export function normalizeCircuitGeoJson(
   });
 
   if (mergeCorners) {
-    const corners = BUNDLED_CORNERS[circuitId] ?? [];
-    for (const corner of corners) {
-      features.push(buildCornerFeature(corner, circuitId));
+    const hasEmbeddedCorners = features.some((f) => f.properties?.role === 'corner');
+    if (!hasEmbeddedCorners) {
+      const corners = BUNDLED_CORNERS[circuitId] ?? [];
+      for (const corner of corners) {
+        features.push(buildCornerFeature(corner, circuitId));
+      }
     }
   }
 

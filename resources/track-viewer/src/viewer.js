@@ -10,6 +10,16 @@ import * as d3 from 'd3';
 // Import Forge bridge for events
 import { events } from '@forge/bridge';
 
+import {
+  buildTrackGeometryIndex,
+  extractCenterline,
+  GEO_PRECISION,
+  roundLonLat,
+  sampleSegmentPoints,
+  segmentScreenBounds,
+  selectSegmentFromBrush,
+} from './track-geometry';
+
 let width, height;
 let canvas, context;
 let svgOverlay;
@@ -22,6 +32,9 @@ let isBrushMode = false; // Default mode is pan/zoom
 let currentTransform = d3.zoomIdentity;
 let resizeObserver = null;
 let brushGroupRef = null;
+let trackGeometryIndex = null;
+let activeTrackSegment = null;
+let circuitId = null;
 
 // Initialize the visualization
 async function init() {
@@ -70,38 +83,84 @@ async function init() {
   });
 }
 
-function updateCanvasSize(newWidth, newHeight) {
-  if (!canvas || !svgOverlay || !newWidth || !newHeight) {
-    return;
+function getLayoutContainer() {
+  return (
+    document.querySelector('.track-viewer-container') ||
+    canvas?.parentElement?.parentElement ||
+    canvas?.parentElement
+  );
+}
+
+/** Read iframe layout size (Forge Frame often settles height after first paint). */
+function measureLayoutSize() {
+  const container = getLayoutContainer();
+  if (!container) {
+    return null;
   }
 
+  const rect = container.getBoundingClientRect();
+  const w = Math.round(container.clientWidth || rect.width);
+  const h = Math.round(container.clientHeight || rect.height);
+  if (!w || !h) {
+    return null;
+  }
+  return { width: w, height: h };
+}
+
+function updateCanvasSize(newWidth, newHeight) {
+  if (!canvas || !svgOverlay || !newWidth || !newHeight) {
+    return false;
+  }
+
+  const sizeChanged = newWidth !== width || newHeight !== height;
   width = newWidth;
   height = newHeight;
   canvas.width = width;
   canvas.height = height;
   svgOverlay.attr('width', width).attr('height', height);
+  return sizeChanged;
+}
+
+function syncBrushExtent() {
+  if (brush && brushGroupRef && width && height) {
+    brush.extent([[0, 0], [width, height]]);
+    brushGroupRef.call(brush);
+  }
+}
+
+/** Sync canvas bitmap + projection to the current iframe size. */
+function syncLayoutFromContainer() {
+  const size = measureLayoutSize();
+  if (!size) {
+    return false;
+  }
+
+  const sizeChanged = updateCanvasSize(size.width, size.height);
+  syncBrushExtent();
+
+  if (geoData && (sizeChanged || !projection)) {
+    updateProjection();
+    draw();
+    return true;
+  }
+
+  return sizeChanged;
+}
+
+function scheduleLayoutSync() {
+  const run = () => syncLayoutFromContainer();
+  requestAnimationFrame(() => {
+    run();
+    requestAnimationFrame(run);
+  });
+  setTimeout(run, 0);
+  setTimeout(run, 100);
+  setTimeout(run, 300);
 }
 
 // Handle resize
 function handleResize() {
-  const container = canvas?.parentElement;
-  if (!container) {
-    return;
-  }
-
-  updateCanvasSize(container.clientWidth, container.clientHeight);
-
-  if (brush) {
-    brush.extent([[0, 0], [width, height]]);
-    if (brushGroupRef) {
-      brushGroupRef.call(brush);
-    }
-  }
-
-  if (geoData) {
-    updateProjection();
-    draw();
-  }
+  syncLayoutFromContainer();
 }
 
 function resetViewToDefault() {
@@ -116,37 +175,22 @@ function resetViewToDefault() {
 }
 
 function setupResizeHandling() {
-  const container = canvas?.parentElement;
+  const containers = [
+    document.querySelector('.track-viewer-container'),
+    canvas?.parentElement,
+  ].filter(Boolean);
 
-  if (typeof ResizeObserver === 'function' && container) {
-    resizeObserver = new ResizeObserver((entries) => {
-      entries.forEach((entry) => {
-        const { width: newWidth, height: newHeight } = entry.contentRect;
-        if (!newWidth || !newHeight) {
-          return;
-        }
-
-        const sizeChanged = newWidth !== width || newHeight !== height;
-        updateCanvasSize(newWidth, newHeight);
-
-        if (sizeChanged) {
-          if (brush && brushGroupRef) {
-            brush.extent([[0, 0], [width, height]]);
-            brushGroupRef.call(brush);
-          }
-
-          if (geoData) {
-            updateProjection();
-            draw();
-          }
-        }
-      });
+  if (typeof ResizeObserver === 'function' && containers.length) {
+    resizeObserver = new ResizeObserver(() => {
+      syncLayoutFromContainer();
     });
 
-    resizeObserver.observe(container);
+    containers.forEach((el) => resizeObserver.observe(el));
   } else {
     window.addEventListener('resize', handleResize);
   }
+
+  scheduleLayoutSync();
 }
 
 // Load GeoJSON content
@@ -162,19 +206,30 @@ function loadGeoJson(geoJsonContent) {
 
     // Store geo data
     geoData = data;
+    activeTrackSegment = null;
+
+    const centerline = extractCenterline(data);
+    circuitId = centerline?.circuitId;
+    trackGeometryIndex = centerline
+      ? buildTrackGeometryIndex(centerline.coordinates)
+      : null;
+
     console.log('GeoJSON loaded:', {
       type: data.type,
       featureCount: data.type === 'FeatureCollection' ? data.features?.length : 1,
-      bounds: d3.geoBounds(data)
+      bounds: d3.geoBounds(data),
+      circuitId,
+      trackLengthM: trackGeometryIndex?.totalLengthM,
+      densifiedVertices: trackGeometryIndex?.coordinates?.length,
     });
 
     // Reset view so new data fits immediately
     resetViewToDefault();
 
-    // Set up projection and path generator
-    updateProjection();
+    scheduleLayoutSync();
 
-    // Draw the track
+    // Set up projection and path generator (re-run after iframe layout settles)
+    updateProjection();
     draw();
     updateStatus('Track loaded. Use Pan / Zoom or Brush Select from the toolbar above the map.');
   } catch (error) {
@@ -183,18 +238,40 @@ function loadGeoJson(geoJsonContent) {
   }
 }
 
+function projectionFitSource() {
+  if (!geoData) {
+    return null;
+  }
+  const centerline = extractCenterline(geoData);
+  if (!centerline) {
+    return geoData;
+  }
+  return {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { role: 'centerline' },
+        geometry: { type: 'LineString', coordinates: centerline.coordinates },
+      },
+    ],
+  };
+}
+
 // Update D3 projection based on data bounds
 function updateProjection() {
-  if (!geoData) return;
+  if (!geoData || !width || !height) {
+    return;
+  }
 
-  // Calculate bounds from GeoJSON
-  const bounds = d3.geoBounds(geoData);
+  const fitSource = projectionFitSource();
+  const bounds = d3.geoBounds(fitSource);
   console.log('GeoJSON bounds:', bounds);
   console.log('Canvas size:', width, 'x', height);
 
   // Create projection
   projection = d3.geoMercator()
-    .fitExtent([[20, 20], [width - 20, height - 20]], geoData)
+    .fitExtent([[20, 20], [width - 20, height - 20]], fitSource)
     .precision(0.1);
 
   // Create path generator
@@ -206,8 +283,21 @@ function updateProjection() {
 
 // Draw the track on canvas
 function draw() {
-  if (!geoData || !context || !path) {
+  if (!geoData || !context) {
     console.warn('Cannot draw: missing data', { geoData: !!geoData, context: !!context, path: !!path });
+    return;
+  }
+
+  if (!width || !height) {
+    scheduleLayoutSync();
+    return;
+  }
+
+  if (!projection || !path) {
+    updateProjection();
+  }
+
+  if (!projection || !path) {
     return;
   }
 
@@ -230,10 +320,41 @@ function draw() {
   context.lineWidth = 3; // Thicker line
   context.fillStyle = 'rgba(0, 82, 204, 0.1)'; // Light blue fill for visibility
 
+  const drawCenterlinePath = (feature) => {
+    context.beginPath();
+    path(feature);
+    context.lineWidth = 3;
+    context.strokeStyle = '#1a1a1a';
+    context.stroke();
+  };
+
+  const drawHighlightedSegment = () => {
+    if (!activeTrackSegment || !trackGeometryIndex || !projection) {
+      return;
+    }
+
+    const { indexStart, indexEnd, coordinates } = activeTrackSegment;
+    const segmentCoords = coordinates.slice(indexStart, indexEnd + 1);
+    const segmentFeature = {
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: segmentCoords },
+    };
+
+    context.beginPath();
+    path(segmentFeature);
+    context.lineWidth = 5;
+    context.strokeStyle = '#0052cc';
+    context.stroke();
+  };
+
   // Draw GeoJSON features (centerline + optional corner points)
   const drawFeature = (feature) => {
     const role = feature.properties?.role;
     const geomType = feature.geometry?.type;
+
+    if (role === 'centerline_detail' || role === 'marshal_light' || role === 'marshal_sector') {
+      return;
+    }
 
     if (geomType === 'Point' && role === 'corner') {
       const projected = projection(feature.geometry.coordinates);
@@ -251,17 +372,14 @@ function draw() {
       return;
     }
 
-    context.beginPath();
-    path(feature);
-    if (role === 'centerline' || geomType === 'LineString') {
-      context.lineWidth = 3;
-      context.strokeStyle = '#1a1a1a';
+    if (role === 'centerline' || (geomType === 'LineString' && !role)) {
+      drawCenterlinePath(feature);
+      return;
     }
-    context.fill();
-    context.stroke();
-    context.lineWidth = 3;
-    context.strokeStyle = '#1a1a1a';
-    context.fillStyle = 'rgba(0, 82, 204, 0.1)';
+
+    if (geomType === 'LineString') {
+      drawCenterlinePath(feature);
+    }
   };
 
   if (geoData.type === 'FeatureCollection') {
@@ -269,6 +387,8 @@ function draw() {
   } else if (geoData.type === 'Feature') {
     drawFeature(geoData);
   }
+
+  drawHighlightedSegment();
 
   // Restore context
   context.restore();
@@ -278,7 +398,7 @@ function draw() {
 function setupInteractions() {
   // Set up zoom behavior
   zoom = d3.zoom()
-    .scaleExtent([0.5, 20])
+    .scaleExtent([0.5, 80])
     .filter((event) => {
       // Disable zoom interactions while Shift (brush mode) is active
       return !isBrushMode;
@@ -314,6 +434,7 @@ function setupInteractions() {
       if (ignoreBrushEvents || !isBrushMode) return;
       if (event.selection) {
         brushSelection = event.selection;
+        updateActiveSegmentFromBrush(event.selection);
         draw();
         updateStatus('Brush active');
       }
@@ -381,7 +502,7 @@ function setInteractionMode(mode) {
   resetBrush();
 
   if (enableBrush) {
-    updateStatus('Brush Select — drag on the map to select an area.');
+    updateStatus('Brush Select — drag a box over the track (near the line is OK).');
   } else {
     updateStatus('Pan / Zoom — drag to pan, scroll to zoom.');
   }
@@ -389,9 +510,34 @@ function setInteractionMode(mode) {
 
 function resetBrush() {
   brushSelection = null;
+  activeTrackSegment = null;
   if (brush && brushGroupRef) {
     brushGroupRef.call(brush.move, null);
   }
+}
+
+function brushRectFromSelection(selection) {
+  const [[x0, y0], [x1, y1]] = selection;
+  return {
+    minX: Math.min(x0, x1),
+    minY: Math.min(y0, y1),
+    maxX: Math.max(x0, x1),
+    maxY: Math.max(y0, y1),
+  };
+}
+
+function updateActiveSegmentFromBrush(selection) {
+  if (!selection || !trackGeometryIndex || !projection) {
+    activeTrackSegment = null;
+    return;
+  }
+
+  activeTrackSegment = selectSegmentFromBrush(
+    trackGeometryIndex,
+    projection,
+    brushRectFromSelection(selection),
+    currentTransform,
+  );
 }
 
 // Generate thumbnail from canvas viewport
@@ -493,19 +639,34 @@ async function initForgeBridge() {
   }
 }
 
+function buildTrackPropertiesPayload(segment) {
+  const centerline = extractCenterline(geoData);
+  const base = centerline?.properties || {};
+  if (!segment) {
+    return base;
+  }
+  return {
+    ...base,
+    circuitId: circuitId || base.circuitId,
+  };
+}
+
+function emitTrackSectionSelected(payload) {
+  events.emit('TRACK_SECTION_SELECTED', payload);
+}
+
 // Handle brush selection - emit event to Forge bridge
 function handleBrushSelection(selection) {
   if (!selection || !geoData || !projection) {
     return;
   }
 
-  const [[x0, y0], [x1, y1]] = selection;
-  const minX = Math.min(x0, x1);
-  const minY = Math.min(y0, y1);
-  const maxX = Math.max(x0, x1);
-  const maxY = Math.max(y0, y1);
+  const brushRect = brushRectFromSelection(selection);
+  const minX = brushRect.minX;
+  const minY = brushRect.minY;
+  const maxX = brushRect.maxX;
+  const maxY = brushRect.maxY;
 
-  // Calculate screen coordinates
   const screenCoords = {
     x: minX,
     y: minY,
@@ -513,48 +674,73 @@ function handleBrushSelection(selection) {
     height: maxY - minY,
   };
 
-  // Convert screen coordinates to geographic coordinates
-  // Account for zoom transform
+  updateActiveSegmentFromBrush(selection);
+  const segment = activeTrackSegment;
+
+  if (!segment) {
+    updateStatus('No track in selection — drag a box over or beside the circuit line.');
+    draw();
+    return;
+  }
+
+  const start = roundLonLat(segment.start);
+  const end = roundLonLat(segment.end);
+
   const geoCoords = {
-    topLeft: projection.invert([(minX - currentTransform.x) / currentTransform.k, (minY - currentTransform.y) / currentTransform.k]),
-    bottomRight: projection.invert([(maxX - currentTransform.x) / currentTransform.k, (maxY - currentTransform.y) / currentTransform.k]),
+    topLeft: start,
+    bottomRight: end,
+    start,
+    end,
   };
 
-  // Calculate viewport (accounting for zoom)
-  const viewport = {
-    x: (minX - currentTransform.x) / currentTransform.k,
-    y: (minY - currentTransform.y) / currentTransform.k,
-    width: (maxX - minX) / currentTransform.k,
-    height: (maxY - minY) / currentTransform.k,
-    scale: currentTransform.k,
+  const geo = {
+    start,
+    end,
+    precision: GEO_PRECISION,
   };
 
-  // Get track properties from GeoJSON
-  const trackProperties = geoData.type === 'FeatureCollection' && geoData.features.length > 0
-    ? geoData.features[0].properties
-    : (geoData.properties || {});
+  const trackRelative = {
+    startDistanceM: Math.round(segment.startDistanceM * 10) / 10,
+    endDistanceM: Math.round(segment.endDistanceM * 10) / 10,
+    totalCircuitLengthM: Math.round(segment.totalCircuitLengthM * 10) / 10,
+    segmentLengthM: Math.round(segment.segmentLengthM * 10) / 10,
+  };
 
-  // Generate thumbnail from canvas
-  generateThumbnail(viewport).then((thumbnailData) => {
-    // Emit event to UI Kit via Forge bridge
-    events.emit('TRACK_SECTION_SELECTED', {
-      viewport: viewport,
-      screenCoords: screenCoords,
-      geoCoords: geoCoords,
-      trackProperties: trackProperties,
-      thumbnailData: thumbnailData,
+  const sampledPoints = sampleSegmentPoints(segment);
+
+  const viewport =
+    segmentScreenBounds(segment, projection, currentTransform) || {
+      x: (minX - currentTransform.x) / currentTransform.k,
+      y: (minY - currentTransform.y) / currentTransform.k,
+      width: (maxX - minX) / currentTransform.k,
+      height: (maxY - minY) / currentTransform.k,
+      scale: currentTransform.k,
+    };
+
+  const trackProperties = buildTrackPropertiesPayload(segment);
+
+  const basePayload = {
+    circuitId: circuitId || trackProperties.circuitId,
+    viewport,
+    screenCoords,
+    geoCoords,
+    geo,
+    trackRelative,
+    sampledPoints,
+    trackProperties,
+  };
+
+  const statusMsg = `Selected ${trackRelative.segmentLengthM.toFixed(0)} m along track (${trackRelative.startDistanceM.toFixed(0)}–${trackRelative.endDistanceM.toFixed(0)} m).`;
+  updateStatus(statusMsg);
+
+  generateThumbnail(viewport)
+    .then((thumbnailData) => {
+      emitTrackSectionSelected({ ...basePayload, thumbnailData });
+    })
+    .catch((error) => {
+      console.error('Failed to generate thumbnail:', error);
+      emitTrackSectionSelected({ ...basePayload, thumbnailData: '' });
     });
-  }).catch((error) => {
-    console.error('Failed to generate thumbnail:', error);
-    // Still emit event without thumbnail
-    events.emit('TRACK_SECTION_SELECTED', {
-      viewport: viewport,
-      screenCoords: screenCoords,
-      geoCoords: geoCoords,
-      trackProperties: trackProperties,
-      thumbnailData: '',
-    });
-  });
 }
 
 // Start initialization

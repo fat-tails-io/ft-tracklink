@@ -37,6 +37,24 @@ describe('circuit-geojson', () => {
     expect(corners[0].properties?.number).toBe(1);
   });
 
+  it('does not merge mock corners when GeoJSON already has corner features', () => {
+    const withCorners = {
+      type: 'FeatureCollection',
+      features: [
+        ...centerlineOnly.features,
+        {
+          type: 'Feature',
+          properties: { role: 'corner', number: 99, name: 'Turn 99', circuitId: 'gb-1948' },
+          geometry: { type: 'Point', coordinates: [-1, 52] },
+        },
+      ],
+    };
+    const normalized = normalizeCircuitGeoJson(withCorners, 'gb-1948');
+    const corners = normalized.features?.filter((f) => f.properties?.role === 'corner') ?? [];
+    expect(corners).toHaveLength(1);
+    expect(corners[0].properties?.number).toBe(99);
+  });
+
   it('extractCircuitSummary reads f1-circuits property names', () => {
     const summary = extractCircuitSummary('gb-1948', centerlineOnly);
     expect(summary).toEqual({

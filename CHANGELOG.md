@@ -117,10 +117,53 @@ npm run forge:deploy
 npm run forge:install:upgrade
 ```
 
-Sync authoring GeoJSON to bundle JSON before deploy when adding bundled circuits (see [`resources/tracks/README.md`](resources/tracks/README.md)).
+Sync authoring GeoJSON to bundle JSON before deploy when adding bundled circuits (see [`src/data/tracks/README.md`](src/data/tracks/README.md)).
 
 For a fuller walkthrough, see [RELEASE_NOTES_v0.0.3.md](RELEASE_NOTES_v0.0.3.md).
 
 ---
 
-Future phases: `v0.0.4` … `v0.0.8`, then `v1.0.0` when the full roadmap ships.
+## [0.0.4] — Phase 4 high-precision track sampling
+
+**Tag:** `v0.0.4`  
+**Roadmap:** Phase 4 — Arc-length brush selection, FastF1-enriched bundled circuits, track data licensing
+
+### Added
+
+- **Layer 2 track data** — Offline FastF1/MultiViewer ETL ([`tools/transpose-circuit-detail.py`](tools/transpose-circuit-detail.py), [`requirements-dev.txt`](requirements-dev.txt), [`src/data/fastf1-circuit-map.json`](src/data/fastf1-circuit-map.json)); enriched Silverstone and Yas Marina in [`src/data/tracks/`](src/data/tracks/) (`layer2Source: fastf1-multiviewer`, corners and marshal themes)
+- **`track-geometry.js`** — Geodesic densify (~1 m), arc-length index, lenient brush-to-segment, `geoLengthM()` for metre distances
+- **Extended selection** — `trackRelative` (`startDistanceM`, `endDistanceM`, `segmentLengthM`), segment geo endpoints, `sampledPoints`; **Along track** row in [`SelectionSummaryPanel`](src/frontend/components/SelectionSummaryPanel.tsx)
+- **Frame layout** — [`TrackViewerFrame`](src/frontend/components/TrackViewerFrame.tsx) explicit height and viewer layout sync (fixes cropped map / grey gap below canvas)
+- **Track data licensing** — [`LICENSE/fastf1-multiviewer.md`](LICENSE/fastf1-multiviewer.md), root [`LICENSE.md`](LICENSE.md) and README track-data table, [`src/data/tracks/README.md`](src/data/tracks/README.md), collapsible [`DataAttributionNotice`](src/frontend/components/DataAttributionNotice.tsx) on global page and issue action
+- **Dev script** — `npm run enrich:tracks` in [`package.json`](package.json)
+- **Tests** — [`resources/track-viewer/src/__tests__/track-geometry.test.js`](resources/track-viewer/src/__tests__/track-geometry.test.js)
+
+### Changed
+
+- [`viewer.js`](resources/track-viewer/src/viewer.js) — Brush selects a **segment on the centerline** (track-relative metres), not only a map bounding box
+- [`circuit-geojson.ts`](src/domain/circuit/circuit-geojson.ts) — Prefer embedded `role: corner` features from enriched GeoJSON over mock bundled corners
+
+### Unchanged (by design)
+
+- No link-to-current issue or Jira custom fields (Phases 5–6)
+- Brush sensitivity admin and use-case selection profiles (documented follow-ups)
+- F1 timing sectors (S1/S2/S3) in static catalog — deferred to session/timing work
+- Full F1 calendar enrichment — content rollout per circuit, not a version blocker
+
+### Install note
+
+Set your Forge `app.id` in [`manifest.yml`](manifest.yml). Build and deploy:
+
+```bash
+npm run build
+forge deploy -e development
+forge install --upgrade   # if already installed
+```
+
+Regenerate enriched tracks locally with `npm run enrich:tracks` (see [`src/data/tracks/README.md`](src/data/tracks/README.md)).
+
+For a fuller walkthrough, see [RELEASE_NOTES_v0.0.4.md](RELEASE_NOTES_v0.0.4.md).
+
+---
+
+Future phases: `v0.0.5` … `v0.0.8`, then `v1.0.0` when the full roadmap ships.

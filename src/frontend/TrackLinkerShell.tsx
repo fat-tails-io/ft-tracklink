@@ -6,14 +6,15 @@ import {
   Heading,
   Text,
   Button,
-  Frame,
   SectionMessage,
 } from '@forge/react';
 import { GeoJsonUploadModal } from './components/GeoJsonUploadModal';
 import { CircuitPicker } from './components/CircuitPicker';
 import { ViewerMapControls } from './components/ViewerMapControls';
+import { TrackViewerFrame } from './components/TrackViewerFrame';
 import type { CircuitSummary } from '../types';
 import { ViewerStatusLine } from './components/ViewerStatusLine';
+import { DataAttributionNotice } from './components/DataAttributionNotice';
 import type { ViewerInteractionMode } from './constants/viewer-events';
 import { frameSurfaceXcss, trackMetaXcss } from './styles/shell-xcss';
 
@@ -104,7 +105,7 @@ export const TrackLinkerShell = ({
             onModeChange={onViewerModeChange}
           />
           <Box xcss={frameSurfaceXcss}>
-            <Frame resource="track-viewer" />
+            <TrackViewerFrame />
           </Box>
           <ViewerStatusLine status={viewerStatus} />
         </Stack>
@@ -118,6 +119,8 @@ export const TrackLinkerShell = ({
         )}
 
         {children}
+
+        <DataAttributionNotice />
       </Stack>
     </Box>
 );

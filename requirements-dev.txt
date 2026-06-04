@@ -1,0 +1,5 @@
+# Dev-only: offline circuit enrichment (not bundled in Forge function)
+# FastF1: MIT — https://github.com/theOehrly/Fast-F1
+# CircuitInfo data via MultiViewer API — see LICENSE/fastf1-multiviewer.md
+fastf1>=3.3.0
+numpy>=1.24.0

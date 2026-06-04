@@ -105,4 +105,13 @@ Version tags follow the F1 roadmap: **`v0.0.N` = Phase N** (for example `v0.0.0`
 
 ## License
 
-[MIT](LICENSE.md)
+[MIT](LICENSE.md) for this application.
+
+### Track data (bundled circuits)
+
+| Layer | Source | Notice |
+| ----- | ------ | ------ |
+| Centerlines | [f1-circuits](https://github.com/bacinger/f1-circuits) | [LICENSE/f1-circuits.md](LICENSE/f1-circuits.md) |
+| Corners, marshal markers, transposed detail | [FastF1](https://github.com/theOehrly/Fast-F1) offline ETL from [MultiViewer](https://multiviewer.app/) circuit API | [LICENSE/fastf1-multiviewer.md](LICENSE/fastf1-multiviewer.md) |
+
+Bundled files live in [`src/data/tracks/`](src/data/tracks/). Regenerate with `npm run enrich:tracks` (dev Python venv; see [`src/data/tracks/README.md`](src/data/tracks/README.md)). The Track Linker UI shows a short attribution notice to end users.

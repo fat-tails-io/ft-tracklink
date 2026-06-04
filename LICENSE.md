@@ -22,3 +22,8 @@ SOFTWARE.
 
 Includes other software related under the MIT license:
 - f1-circuits, Copyright (c) 2019-2025 Tomislav Bacinger. For licensing see /LICENSE/f1-circuits.md
+- Fast-F1 (FastF1), Copyright (c) theOehrly and contributors. MIT License — see https://github.com/theOehrly/Fast-F1
+
+Bundled track geometry also includes data derived under Phase 4 (see /LICENSE/fastf1-multiviewer.md):
+- Circuit centerlines from f1-circuits (MIT)
+- Corner, marshal, and transposed detail geometry produced offline via FastF1 from MultiViewer circuit information (visualization-grade; not survey data)
