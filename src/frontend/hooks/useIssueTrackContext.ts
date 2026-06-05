@@ -2,6 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { invoke } from '@forge/bridge';
 import type { GetIssueTrackContextResponse, TrackLinkEntry } from '../../types';
 
+export type RefreshIssueTrackContextOptions = {
+  /** Select this link after refresh when it exists in the bundle. */
+  selectLinkId?: string;
+  /** When true, always select the most recent link (overrides keeping prior selection). */
+  preferNewest?: boolean;
+};
+
 export type UseIssueTrackContextOptions = {
   issueKey?: string;
 };
@@ -17,7 +24,7 @@ export const useIssueTrackContext = (
   canAddLink: boolean;
   selectedLinkId: string | undefined;
   setSelectedLinkId: (linkId: string | undefined) => void;
-  refresh: () => Promise<void>;
+  refresh: (options?: RefreshIssueTrackContextOptions) => Promise<void>;
 } => {
   const { issueKey } = options;
   const [loading, setLoading] = useState(Boolean(issueKey));
@@ -28,7 +35,7 @@ export const useIssueTrackContext = (
   const [canAddLink, setCanAddLink] = useState(true);
   const [selectedLinkId, setSelectedLinkId] = useState<string | undefined>();
 
-  const refresh = useCallback(async (): Promise<void> => {
+  const refresh = useCallback(async (options?: RefreshIssueTrackContextOptions): Promise<void> => {
     if (!issueKey) {
       setLoading(false);
       setSummary('');
@@ -49,10 +56,17 @@ export const useIssueTrackContext = (
       setMaxLinks(ctx.maxLinks);
       setCanAddLink(ctx.canAddLink);
       setSelectedLinkId((prev) => {
+        const newestId = ctx.links[ctx.links.length - 1]?.linkId;
+        if (options?.preferNewest) {
+          return newestId;
+        }
+        if (options?.selectLinkId && ctx.links.some((l) => l.linkId === options.selectLinkId)) {
+          return options.selectLinkId;
+        }
         if (prev && ctx.links.some((l) => l.linkId === prev)) {
           return prev;
         }
-        return ctx.links[ctx.links.length - 1]?.linkId;
+        return newestId;
       });
     } catch (error) {
       console.error('Failed to load issue track context:', error);

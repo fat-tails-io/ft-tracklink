@@ -7,7 +7,7 @@ export const panelSurfaceXcss = xcss({
   borderWidth: 'border.width',
   borderStyle: 'solid',
   borderColor: 'color.border',
-  borderRadius: 'border.radius',
+  borderRadius: 'radius.medium',
 });
 
 export const frameSurfaceXcss = xcss({
@@ -16,7 +16,7 @@ export const frameSurfaceXcss = xcss({
   borderWidth: 'border.width',
   borderStyle: 'solid',
   borderColor: 'color.border',
-  borderRadius: 'border.radius',
+  borderRadius: 'radius.medium',
   overflow: 'hidden',
 });
 

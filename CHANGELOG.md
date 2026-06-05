@@ -2,6 +2,50 @@
 
 All notable releases are tagged on GitHub. Version numbers follow [VERSIONING.md](VERSIONING.md) (patch digit = roadmap phase).
 
+## [0.0.6] — Phase 6 Jira custom fields
+
+**Tag:** `v0.0.6`  
+**Roadmap:** Phase 6 — Circuit and segment visible on the issue view without opening Track Linker
+
+### Added
+
+- **Manifest** — Three app-owned `jira:customField` modules: **F1 Circuit**, **F1 Segment**, **F1 Track links**; scope `write:app-data:jira`
+- **Field writes** — [`jira-service.ts`](src/domain/services/jira-service.ts) `updateTrackCustomFields` via `POST /rest/api/3/app/field/value` (`asApp`), numeric `issueIds`
+- **Field ID resolution** — [`resolve-forge-field-id.ts`](src/domain/track-link/resolve-forge-field-id.ts) maps manifest module keys to Jira `customfield_*` ids via `GET /rest/api/3/field`
+- **Domain** — [`build-custom-field-values.ts`](src/domain/track-link/build-custom-field-values.ts), shared [`track-link-format.ts`](src/domain/track-link/track-link-format.ts)
+- **Link flow** — [`persist-issue-track-link.ts`](src/domain/track-link/persist-issue-track-link.ts) updates fields from the **latest** KVS link after each successful link (skips `unknown` circuit); returns `customFieldsUpdated` / `customFieldsWarning`
+- **Tests** — `build-custom-field-values.test.ts`, `resolve-forge-field-id.test.ts`
+- **CI** — `npm run audit` (high severity) for root app and `resources/track-viewer`, included in `npm run ci`
+
+### Changed
+
+- **Issue action UX** — After linking, selection jumps to the newest segment; saved-segments list is **newest-first** with a **Latest** label
+- **`useIssueTrackContext.refresh`** — Supports `preferNewest` / `selectLinkId`; highlight still runs after circuit change via existing effect
+- **`useIssueTrackActions`** — Surfaces `customFieldsWarning` when field write fails (link still succeeds)
+- **Dependencies** — `@typescript-eslint/*` v8.60.1; `uuid` override `^11.1.1`; track-viewer webpack/babel audit fixes
+
+### Unchanged / deferred
+
+- **Same-circuit multi-segment overlay** on one map view (future phase)
+- Backfill custom fields on issues that already have KVS links (values set on next link)
+- `jira:issueGlance` deep link from issue view
+- **Issue action mop-up** (performance + layout) — [phase-5-issue-action-mopup.plan.md](.cursor/plans/phase-5-issue-action-mopup.plan.md)
+- **Post-v1 UI consolidation** — [post-v1-ui-consolidation.plan.md](.cursor/plans/post-v1-ui-consolidation.plan.md)
+
+### Install note
+
+```bash
+npm run ci
+npm run forge:deploy
+npm run forge:install:upgrade
+```
+
+Add **F1 Circuit**, **F1 Segment**, and **F1 Track links** to your FT issue screen in Jira admin. Re-consent may be required for `write:app-data:jira`.
+
+For a fuller walkthrough, see [RELEASE_NOTES_v0.0.6.md](RELEASE_NOTES_v0.0.6.md).
+
+---
+
 ## [0.0.0] — Phase 0 baseline
 
 **Tag:** `v0.0.0`  
@@ -208,4 +252,4 @@ For a fuller walkthrough, see [RELEASE_NOTES_v0.0.5.md](RELEASE_NOTES_v0.0.5.md)
 
 ---
 
-Future phases: `v0.0.6` … `v0.0.8`, then `v1.0.0` when the full roadmap ships.
+Future phases: `v0.0.7` … `v0.0.8`, then `v1.0.0` when the full roadmap ships.

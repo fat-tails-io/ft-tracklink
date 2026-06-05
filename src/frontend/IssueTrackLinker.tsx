@@ -64,9 +64,12 @@ export const IssueTrackLinker = (): React.JSX.Element => {
     projectKey,
     trackName,
     circuitId: selectedCircuitId,
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setSelectedSection(null);
-      await refreshIssueContext();
+      await refreshIssueContext({
+        preferNewest: true,
+        selectLinkId: result?.linkId,
+      });
     },
   });
 
@@ -132,9 +135,7 @@ export const IssueTrackLinker = (): React.JSX.Element => {
     const catalogCircuit = resolveCircuitIdFromLinks([link], circuits);
     if (catalogCircuit && catalogCircuit !== selectedCircuitId) {
       void selectCircuit(catalogCircuit);
-      return;
-    }
-    if (link.trackRelative) {
+    } else if (link.trackRelative) {
       highlightSavedLink(link);
     }
   };

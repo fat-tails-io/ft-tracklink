@@ -5,11 +5,23 @@ import type {
   CreateTrackIssueResponse,
   ThumbnailAttachmentRequest,
 } from '../../types';
+import type { TrackCustomFieldValues } from '../track-link/build-custom-field-values';
+import {
+  TRACK_CIRCUIT_FIELD_KEY,
+  TRACK_LINKS_FIELD_KEY,
+  TRACK_SEGMENT_FIELD_KEY,
+} from '../track-link/build-custom-field-values';
+import {
+  type JiraFieldDefinition,
+  resolveFieldIdOrKey,
+} from '../track-link/resolve-forge-field-id';
 
 /**
  * JIRA service for creating issues and managing attachments
  */
 export class JiraService {
+  private jiraFieldCatalog: JiraFieldDefinition[] | null = null;
+
   /**
    * Create a JIRA issue
    */
@@ -85,7 +97,7 @@ export class JiraService {
     const response = await api.asUser().requestJira(route`/rest/api/3/issue/${request.issueKey}/attachments`, {
       method: 'POST',
       headers,
-      body: form as unknown as FormData,
+      body: form as unknown as NonNullable<Parameters<ReturnType<typeof api.asUser>['requestJira']>[1]>['body'],
     });
 
     if (!response.ok) {
@@ -169,6 +181,79 @@ export class JiraService {
     }
 
     return (await response.json()) as { key: string; fields: { summary: string } };
+  }
+
+  async getIssueNumericId(issueKey: string): Promise<number> {
+    const response = await api.asUser().requestJira(
+      route`/rest/api/3/issue/${issueKey}?fields=id`,
+      {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get JIRA issue id: ${response.status} ${errorText}`);
+    }
+
+    const data = (await response.json()) as { id: string | number };
+    const issueId = typeof data.id === 'number' ? data.id : parseInt(String(data.id), 10);
+    if (!Number.isFinite(issueId)) {
+      throw new Error(`Invalid JIRA issue id for ${issueKey}`);
+    }
+    return issueId;
+  }
+
+  private async loadJiraFieldCatalog(): Promise<JiraFieldDefinition[]> {
+    if (this.jiraFieldCatalog) {
+      return this.jiraFieldCatalog;
+    }
+
+    const response = await api.asApp().requestJira(route`/rest/api/3/field`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to list Jira fields: ${response.status} ${errorText}`);
+    }
+
+    this.jiraFieldCatalog = (await response.json()) as JiraFieldDefinition[];
+    return this.jiraFieldCatalog;
+  }
+
+  async updateTrackCustomFields(
+    issueKey: string,
+    values: TrackCustomFieldValues,
+  ): Promise<void> {
+    const issueId = await this.getIssueNumericId(issueKey);
+    const fields = await this.loadJiraFieldCatalog();
+
+    const updates = [
+      { moduleKey: TRACK_CIRCUIT_FIELD_KEY, value: values.circuit },
+      { moduleKey: TRACK_SEGMENT_FIELD_KEY, value: values.segment },
+      { moduleKey: TRACK_LINKS_FIELD_KEY, value: values.linksSummary },
+    ].map((entry) => ({
+      customField: resolveFieldIdOrKey(fields, entry.moduleKey),
+      issueIds: [issueId],
+      value: entry.value,
+    }));
+
+    const response = await api.asApp().requestJira(route`/rest/api/3/app/field/value`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ updates }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to update track custom fields: ${response.status} ${errorText}`);
+    }
   }
 }
 

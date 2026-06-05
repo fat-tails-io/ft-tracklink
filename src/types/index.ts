@@ -116,6 +116,8 @@ export interface LinkSelectionToIssueResponse {
   commentId?: string;
   linkCount: number;
   maxLinks: number;
+  customFieldsUpdated?: boolean;
+  customFieldsWarning?: string;
 }
 
 export interface CreateLinkedTrackIssueRequest {

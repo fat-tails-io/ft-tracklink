@@ -48,6 +48,20 @@ Furthermore, this aligns with Atlassian's multi-modal collaboration model. Teams
 
 Setup and installation instructions: [SETUP.txt](SETUP.txt)
 
+### Jira custom fields (Phase 6)
+
+After deploy, add these app fields to your project **issue screen** (Jira settings → Issues → Fields → screens):
+
+| Field | Purpose |
+| ----- | ------- |
+| **F1 Circuit** | Latest linked circuit (display name + id) |
+| **F1 Segment** | Latest segment along the track (metres) |
+| **F1 Track links** | Shown when the issue has more than one linked segment (e.g. `3 segments`) |
+
+Values are written automatically when you link a segment from the issue action. Full geometry stays in Forge storage; comments remain the per-link audit trail.
+
+**Current release:** `v0.0.6` — see [CHANGELOG.md](CHANGELOG.md) and [RELEASE_NOTES_v0.0.6.md](RELEASE_NOTES_v0.0.6.md).
+
 ## Development
 
 ### Project Structure

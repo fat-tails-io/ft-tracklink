@@ -20,6 +20,38 @@ modules:
       title: Track Linker
       viewportSize: large
 
+  jira:customField:
+    - key: track-circuit-field
+      name: F1 Circuit
+      description: Latest linked F1 circuit from Track Linker
+      type: string
+      readOnly: true
+      view:
+        experience:
+          - issue-view
+        formatter:
+          expression: "value != null ? value : ''"
+    - key: track-segment-field
+      name: F1 Segment
+      description: Latest linked track segment (metres along circuit)
+      type: string
+      readOnly: true
+      view:
+        experience:
+          - issue-view
+        formatter:
+          expression: "value != null ? value : ''"
+    - key: track-links-field
+      name: F1 Track links
+      description: Count of linked track segments when more than one
+      type: string
+      readOnly: true
+      view:
+        experience:
+          - issue-view
+        formatter:
+          expression: "value != null ? value : ''"
+
   function:
     - key: track-linker-resolver
       handler: index.handler
@@ -35,4 +67,5 @@ permissions:
     - write:jira-work
     - write:attachment:jira
     - read:jira-work
+    - write:app-data:jira
     - storage:app

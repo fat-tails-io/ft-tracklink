@@ -8,6 +8,10 @@ import {
 import { MAX_TRACK_LINKS_PER_ISSUE } from './constants';
 import { buildTrackLinkCommentAdf } from './track-link-comment';
 import { selectionToLinkEntry } from './selection-to-link-entry';
+import {
+  buildCustomFieldValues,
+  shouldWriteTrackCustomFields,
+} from './build-custom-field-values';
 import type {
   LinkSelectionToIssueRequest,
   LinkSelectionToIssueResponse,
@@ -71,12 +75,35 @@ export const persistSelectionOnIssue = async (
   }
 
   const bundle = await getIssueTrackLinks(issueKey);
+  const linkCount = bundle?.links.length ?? entry.linkIndex + 1;
+  const latestLink = bundle?.links[linkCount - 1] ?? entry;
+
+  let customFieldsUpdated = false;
+  let customFieldsWarning: string | undefined;
+
+  if (latestLink && shouldWriteTrackCustomFields(latestLink.circuitId)) {
+    try {
+      const fieldValues = buildCustomFieldValues({
+        latestLink,
+        linkCount,
+        circuitDisplayName: request.circuitDisplayName,
+      });
+      await jiraService.updateTrackCustomFields(issueKey, fieldValues);
+      customFieldsUpdated = true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected error';
+      customFieldsWarning = message;
+      console.error('Failed to update track custom fields:', error);
+    }
+  }
 
   return {
     linkId: entry.linkId,
     linkIndex: entry.linkIndex,
     commentId: entry.commentId,
-    linkCount: bundle?.links.length ?? entry.linkIndex + 1,
+    linkCount,
     maxLinks: MAX_TRACK_LINKS_PER_ISSUE,
+    customFieldsUpdated,
+    customFieldsWarning,
   };
 };

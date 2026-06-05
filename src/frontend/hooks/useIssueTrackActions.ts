@@ -14,7 +14,7 @@ export type UseIssueTrackActionsOptions = {
   projectKey?: string;
   trackName: string;
   circuitId?: string;
-  onSuccess?: () => Promise<void> | void;
+  onSuccess?: (result?: { linkId: string }) => Promise<void> | void;
 };
 
 const selectionToLinkRequest = (
@@ -93,7 +93,16 @@ export const useIssueTrackActions = ({
           description: `Linked segment ${result.linkIndex + 1} to ${issueKey} (${result.linkCount}/${result.maxLinks}).`,
           isAutoDismiss: true,
         });
-        await onSuccess?.();
+        if (result.customFieldsWarning) {
+          showFlag({
+            id: 'link-custom-fields-warning',
+            title: 'Issue fields not updated',
+            type: 'warning',
+            description: result.customFieldsWarning,
+            isAutoDismiss: false,
+          });
+        }
+        await onSuccess?.({ linkId: result.linkId });
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unexpected error';
         showFlag({

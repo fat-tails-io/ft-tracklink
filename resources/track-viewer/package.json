@@ -1,6 +1,6 @@
 {
   "name": "track-viewer",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "F1 Track Viewer Frame Component",
   "private": true,
   "scripts": {

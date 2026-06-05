@@ -53,6 +53,8 @@ export const IssueLinkPanel = ({
   const hasSelection = Boolean(selectedSection?.trackRelative);
   const atCap = !canAddLink;
   const linkDisabled = !issueKey || !hasSelection || atCap || isLinking || isCreatingSubtask;
+  const newestLinkId = links.length > 0 ? links[links.length - 1]?.linkId : undefined;
+  const linksNewestFirst = [...links].sort((a, b) => b.linkIndex - a.linkIndex);
 
   return (
     <Box xcss={panelSurfaceXcss}>
@@ -101,15 +103,19 @@ export const IssueLinkPanel = ({
         {links.length > 0 && (
           <Stack space="space.100">
             <Heading size="small">Saved segments</Heading>
-            {links.map((link) => (
-              <Button
-                key={link.linkId}
-                appearance={selectedLinkId === link.linkId ? 'primary' : 'subtle'}
-                onClick={() => onSelectLink(link.linkId)}
-              >
-                {formatTrackLinkLabel(link, trackName)}
-              </Button>
-            ))}
+            {linksNewestFirst.map((link) => {
+              const isLatest = link.linkId === newestLinkId;
+              const label = formatTrackLinkLabel(link, trackName);
+              return (
+                <Button
+                  key={link.linkId}
+                  appearance={selectedLinkId === link.linkId ? 'primary' : 'subtle'}
+                  onClick={() => onSelectLink(link.linkId)}
+                >
+                  {isLatest ? `Latest — ${label}` : label}
+                </Button>
+              );
+            })}
           </Stack>
         )}
 
